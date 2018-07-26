@@ -36,6 +36,7 @@ struct package* Send_To_All_And_Receive_From_All( int data, int size, int my_ran
 			MPI_Send(&data, ONE_INT, MPI_INT, i, WANT_TO_DRINK, MPI_COMM_WORLD);
 			printf("I sent to %d and my rank is %d\n", i, my_rank);
 			MPI_Recv(group_index_and_answer_and_rank, THREE_INT, MPI_INT, i, ANSWER, MPI_COMM_WORLD, &status);
+			printf("I received from %d and my rank is %d\n", i, my_rank);
 			recv_packages[recv_count].group_index = group_index_and_answer_and_rank[0];
                 	recv_packages[recv_count].answer = group_index_and_answer_and_rank[1];
                 	recv_packages[recv_count].rank = group_index_and_answer_and_rank[2];
@@ -92,7 +93,11 @@ void Get_All_Ranks_From_Group( struct package* packages, int size, int group_ind
 
 int main(int argc, char **argv)
 {
-	MPI_Init(&argc, &argv);
+	int provided;
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+	if(provided != MPI_THREAD_MULTIPLE){
+	MPI_Abort(MPI_COMM_WORLD, 0);	
+}
 	int size, rank, i_want_to_drink = -1, range = 100, my_group_index = 1;
 	int * all_ranks_in_group = malloc(sizeof(int)* size);
 	memset(all_ranks_in_group, -1, sizeof(int)* size);
@@ -174,7 +179,8 @@ int main(int argc, char **argv)
 					group_index_answer_rank[1] = NO;
 					group_index_answer_rank[2] = rank;
 					printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+					int x = MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+					if(x == MPI_SUCCESS) printf("SUCCESS\n");
 				}
 
 			}
