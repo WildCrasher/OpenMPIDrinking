@@ -7,6 +7,10 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+//#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+
 
 #define ONE_INT 1
 #define THREE_INT 3
@@ -25,9 +29,9 @@ struct package
 struct package* Send_To_All_And_Receive_From_All( int data, int size, int my_rank)
 {
 	int recv_count = 0;
-        int group_index_and_answer_and_rank[3];
-        struct package* recv_packages = malloc(sizeof(struct package) * (size));
-        MPI_Status status;
+	int group_index_and_answer_and_rank[3];
+	struct package* recv_packages = malloc(sizeof(struct package) * (size));
+	MPI_Status status;
 
 	for( int i = 0; i < size; i++)
 	{
@@ -38,13 +42,13 @@ struct package* Send_To_All_And_Receive_From_All( int data, int size, int my_ran
 			MPI_Recv(group_index_and_answer_and_rank, THREE_INT, MPI_INT, i, ANSWER, MPI_COMM_WORLD, &status);
 			printf("I received from %d and my rank is %d\n", i, my_rank);
 			recv_packages[recv_count].group_index = group_index_and_answer_and_rank[0];
-                	recv_packages[recv_count].answer = group_index_and_answer_and_rank[1];
-                	recv_packages[recv_count].rank = group_index_and_answer_and_rank[2];
-                	recv_count++;
+			recv_packages[recv_count].answer = group_index_and_answer_and_rank[1];
+			recv_packages[recv_count].rank = group_index_and_answer_and_rank[2];
+			recv_count++;
 			sleep(1);
 		}
 	}
-	
+
 	printf("Receive from all my rank is %d\n", my_rank);
 	return recv_packages;
 }
@@ -95,15 +99,16 @@ int main(int argc, char **argv)
 {
 	int provided;
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-	if(provided != MPI_THREAD_MULTIPLE){
-	MPI_Abort(MPI_COMM_WORLD, 0);	
-}
+
 	int size, rank, i_want_to_drink = -1, range = 100, my_group_index = 1;
 	int * all_ranks_in_group = malloc(sizeof(int)* size);
 	memset(all_ranks_in_group, -1, sizeof(int)* size);
 
+	int i_want_to_drink_id = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666 );
+
 	struct package* packages = malloc(sizeof(struct package)* (size - 1));
 
+	
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -112,48 +117,49 @@ int main(int argc, char **argv)
 
 	if(fork() != 0) //root
 	{
-		sleep(1);
+		//int* i_want_to_drink2;
+		//i_want_to_drink2 = shmat(i_want_to_drink_id, NULL, 0);
+		
 		printf("start losu losu\n");
 		while(i_want_to_drink != 1)
 		{
 			i_want_to_drink = rand()%range;
 			sleep(rank);
 		}
+		//shmdt(i_want_to_drink_id);
 
 		printf("Chce pic! %d\n", rank);
 
 		printf("I send to all and wait for all and my rank is %d\n", rank);
 		packages = Send_To_All_And_Receive_From_All(my_group_index, size, rank);
-	
-	//	packages = Recv_Package_From_All(size);
-	
+
+
 		for( int i = 0 ; i < size - 1; i++)
 		{
 			printf("Package number %d, group index %d, my rank %d\n", i, packages[i].group_index, rank);
 		}
-
-		/*	int temp_group_index = Check_If_I_Can_Drink(packages, size);
-			if( temp_group_index == -1 || temp_group_index == -2)
-			{
-		//	my_group_index++;
-		//	Send_To_All(my_group_index, ONE_INT, size, WANT_TO_DRINK, rank);
-		//	packages = Recv_Package_From_All(THREE_INT, size);
-
-		}
-		else
+/*
+		int temp_group_index = Check_If_I_Can_Drink(packages, size);
+		while( temp_group_index == -1 || temp_group_index == -2)
 		{
-		my_group_index = temp_group_index;
+			printf("%d failure\n", my_group_index);
+			my_group_index++;
+			packages = Send_To_All_And_Receive_From_All(my_group_index, size, rank);
 		}
-		 */
+	
+		printf("SUCCESS- I am in group %d, and my rank is %d\n", my_group_index, rank);
+		my_group_index = temp_group_index;
+		
+
 
 		while(1){sleep(1);}	
 		//Get_All_Ranks_From_Group(packages, size, my_group_index, all_ranks_in_group);
 
-	}
+*/	}
 	else //child
 	{
 		int his_group_index = 1, group_index_answer_rank[3];
-		
+
 		while(1)
 		{
 			printf("i am waiting, my rank is %d\n", rank);
@@ -167,7 +173,7 @@ int main(int argc, char **argv)
 					group_index_answer_rank[1] = YES;
 					group_index_answer_rank[2] = rank;
 					printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-			//		MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);	
+					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);	
 				}
 				else
 				{
@@ -179,8 +185,7 @@ int main(int argc, char **argv)
 					group_index_answer_rank[1] = NO;
 					group_index_answer_rank[2] = rank;
 					printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-					int x = MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
-					if(x == MPI_SUCCESS) printf("SUCCESS\n");
+					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 				}
 
 			}
@@ -188,6 +193,7 @@ int main(int argc, char **argv)
 		}
 	}
 	wait(0);
+	shmctl(i_want_to_drink_id, IPC_RMID, NULL);
 	printf("MPI finallize\n");
 	MPI_Finalize();
 	return 0;
