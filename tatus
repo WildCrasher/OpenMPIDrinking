@@ -1,0 +1,47 @@
+[33mcommit 34987bc4ce82e344cccbe4c55c098122bdfd0d36[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Thu Aug 2 15:11:33 2018 +0200
+
+    Semaphores added, but segmentation faults still happen at the end
+
+[33mcommit 630d5c0de11f1826efda86d3ff661578fb5464cd[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Tue Jul 31 14:14:11 2018 +0200
+
+    Second version of the same program, seem to be working. Need to add semaphores, segmentation faults
+
+[33mcommit 877472829f31b85afb54f577b0790be8f124ef70[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Sun Jul 29 11:56:22 2018 +0200
+
+    Simple program ./test.c. The same idea like in chlanie.c
+
+[33mcommit 1473685e078f1474bc30239104fef7332ffb7333[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Sun Jul 29 11:25:08 2018 +0200
+
+    The same problem in ./test.c
+
+[33mcommit ada1d2dcdb15cf7a3f6350ff639c332fcd018ef7[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Thu Jul 26 16:49:56 2018 +0200
+
+    Need to update openmpi to thread multiple and it works now
+
+[33mcommit 766d3b288dd3239bc0154b990ac615aa8699c0f3[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Thu Jul 26 16:49:26 2018 +0200
+
+    Need to update openmpi to thread multiple and it works now
+
+[33mcommit f04f6088af3fb7a2b934ad7287500404be33c783[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Tue Jul 24 14:34:19 2018 +0200
+
+    Try to solve blocked receive
+
+[33mcommit 34c396abd63b7b13ef99a12c95f777fe75d2862b[m
+Author: WildCrasher <dzikigeneral1996@o2.pl>
+Date:   Tue Jul 24 14:26:33 2018 +0200
+
+    Initial commit
