@@ -11,6 +11,7 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 
+#define SEMCOUNT 1
 #define FALSE 0
 #define TRUE 1
 #define ONE_INT 1
@@ -20,14 +21,9 @@
 #define YES 1
 #define NO 0
 
-struct package
-{
-	int group_index;
-	int answer;
-	int rank;
-};
+struct sembuf buf;
 
-void Send_To_All( int data, int size, int my_rank, int group_index)
+void Send_To_All( int group_index, int size, int my_rank)
 {
 	int group_index_answer_rank[3];
 	group_index_answer_rank[0] = group_index;
@@ -60,6 +56,7 @@ void Add_Mate_To_Group( int mate_rank, int* all_mates, int size)
 	}
 }
 
+/*
 int Check_If_I_Can_Drink(struct package* packages, int size)
 {
 	int group_index = -1;
@@ -100,6 +97,23 @@ void Get_All_Ranks_From_Group( struct package* packages, int size, int group_ind
 		}
 	}
 }
+*/
+
+void up(int semid)
+{
+	buf.sem_num = 0;
+	buf.sem_op = 1;
+	buf.sem_flg = 0;
+	semop(semid, &buf, 1);
+}
+
+void down(int semid)
+{
+	buf.sem_num = 0;
+        buf.sem_op = -1;
+        buf.sem_flg = 0;
+        semop(semid, &buf, 1);
+}
 
 int main(int argc, char **argv)
 {
@@ -108,7 +122,10 @@ int main(int argc, char **argv)
 
 	int size, rank, range = 100, my_group_index = 1;
 
-	int i_want_to_drink_id = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | 0666 );
+	int i_want_to_drink_id = shmget(rank + 1, sizeof(int), IPC_CREAT | 0666 ); //was IPC_PRIVATE
+
+	int semaphore_drink_id = semget(rank + 1, SEMCOUNT, 0666 | IPC_CREAT);
+	semctl(semaphore_drink_id, 0, SETVAL, (int)1);
 
 	int *i_want_to_drink;
 	i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
@@ -124,18 +141,26 @@ int main(int argc, char **argv)
 	if(fork() != 0) //root
 	{
 		printf("start losu losu\n");
+		down(semaphore_drink_id);
 		i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
+		
 		while(*i_want_to_drink != 1)
 		{
 			*i_want_to_drink = rand()%range;
 			shmdt(i_want_to_drink);
+			up(semaphore_drink_id);
 			sleep(0.8);
+			down(semaphore_drink_id);
+			i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
 		}
-		sleep(1000);
-		printf("Chce pic! %d\n", rank);
 
+		shmdt(i_want_to_drink);
+		up(semaphore_drink_id);
+
+		printf("Chce pic! %d\n", rank);
+		
 		printf("I send to all and wait for all and my rank is %d\n", rank);
-		Send_To_All(my_group_index, size, rank, my_group_index); //group_index can be changed, so it is temporary solution
+		Send_To_All(my_group_index, size, rank); //group_index can be changed, so it is temporary solution
 
 		sleep(1000);
 		//wait for end
@@ -147,7 +172,7 @@ int main(int argc, char **argv)
 		int* all_mates_in_group = malloc(sizeof(int)* size);
         	memset(all_mates_in_group, -1, sizeof(int)* size);
 		int invalid = FALSE;
-
+		
 		while(1)
 		{
 			printf("i am waiting, my rank is %d\n", rank);
@@ -155,10 +180,12 @@ int main(int argc, char **argv)
 			printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
 			if( status.MPI_TAG == WANT_TO_DRINK)
 			{
+				down(semaphore_drink_id);
 				i_want_to_drink2 = (int*) shmat(i_want_to_drink_id, NULL, 0);
 				if(*i_want_to_drink2 == 1)
 				{
 					shmdt(i_want_to_drink2);
+					up(semaphore_drink_id);
 					group_index_answer_rank[0] = my_group_index;
 					group_index_answer_rank[2] = rank;
 					if( group_index_answer_rank[0] == my_group_index)
@@ -177,6 +204,8 @@ int main(int argc, char **argv)
 				else
 				{
 					shmdt(i_want_to_drink2);
+					up(semaphore_drink_id);
+
 					if(my_group_index < group_index_answer_rank[0])
 					{
 						my_group_index = group_index_answer_rank[0];
@@ -191,7 +220,7 @@ int main(int argc, char **argv)
 			}
 			else if( status.MPI_TAG == ANSWER)
 			{
-				answer_count++;
+	/*			answer_count++;
 				if( group_index_answer_rank[1] == YES && invalid == FALSE)
 				{
 					Add_Mate_To_Group( status.MPI_SOURCE, all_mates_in_group, size );
@@ -211,11 +240,14 @@ int main(int argc, char **argv)
 				//	printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
 					answer_count = 0;
 					invalid = FALSE;
-				}
+				} */
+				// It is comment just to debug segmentation fault
 			}
 		}
 	}
+	printf("WAIT\n");
 	wait(0);
+	semctl(semaphore_drink_id, 0, IPC_RMID);
 	shmctl(i_want_to_drink_id, IPC_RMID, NULL);
 	printf("MPI finallize\n");
 	MPI_Finalize();
