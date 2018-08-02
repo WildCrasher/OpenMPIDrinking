@@ -246,6 +246,9 @@ int main(int argc, char **argv)
 				} */
 				// It is comment just to debug segmentation fault
 			}
+			else{
+				printf("AAAAAAA\n");
+			}
 		}
 	}
 	printf("WAIT\n");
