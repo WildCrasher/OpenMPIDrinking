@@ -7,4 +7,4 @@ compile: start
 run: compile
 	mpirun --oversubscribe -np 3 chlanie2
 #runwithdebugger: compile
-	mpirun --oversubscribe -np 3 xterm -hold -e gdb -ex run --args chlanie2
+#	mpirun --oversubscribe -np 3 xterm -hold -e gdb -ex run --args chlanie2

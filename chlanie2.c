@@ -123,7 +123,19 @@ int main(int argc, char **argv)
 	int provided;
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
 
-	int size, rank, range = 100, my_group_index = 1;
+	int size, rank, range = 100;
+
+	int my_group_index_id = shmget( IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT );
+
+	int semaphore_my_group_index_id = semget( IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
+        semctl(semaphore_my_group_index_id, 0, SETVAL, (int)1);
+	
+	int *my_group_index;
+
+	my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+        *my_group_index = 1;
+        shmdt(my_group_index);
+
 
 	int i_want_to_drink_id = shmget( IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT );
 
@@ -135,6 +147,7 @@ int main(int argc, char **argv)
 	i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
 	*i_want_to_drink = -1;
 	shmdt(i_want_to_drink);
+
 
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -164,7 +177,14 @@ int main(int argc, char **argv)
 		printf("Chce pic! %d\n", rank);
 
 		printf("I send to all and wait for all and my rank is %d\n", rank);
-		Send_To_All(my_group_index, size, rank); //group_index can be changed, so it is temporary solution
+		
+		down(semaphore_my_group_index_id);
+		my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+		int temp = *my_group_index;
+		shmdt(my_group_index);
+		up(semaphore_my_group_index_id);
+
+		Send_To_All(temp, size, rank);
 
 		while(1){}
 		printf("OUT\n");
@@ -187,13 +207,19 @@ int main(int argc, char **argv)
 			{
 				down(semaphore_drink_id);
 				i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
+				
+				down(semaphore_my_group_index_id);
+                                my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+
 				if(*i_want_to_drink == 1)
 				{
 					shmdt(i_want_to_drink);
 					up(semaphore_drink_id);
-					group_index_answer_rank[0] = my_group_index;
+					
+					group_index_answer_rank[0] = *my_group_index;
+
 					group_index_answer_rank[2] = rank;
-					if( group_index_answer_rank[0] == my_group_index)
+					if( group_index_answer_rank[0] == *my_group_index)
 					{
 						group_index_answer_rank[1] = YES;
 						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
@@ -211,30 +237,34 @@ int main(int argc, char **argv)
 					shmdt(i_want_to_drink);
 					up(semaphore_drink_id);
 
-					if(my_group_index < group_index_answer_rank[0])
+					if(*my_group_index < group_index_answer_rank[0])
 					{
-						my_group_index = group_index_answer_rank[0];
+						*my_group_index = group_index_answer_rank[0];
 					}
-					group_index_answer_rank[0] = my_group_index;
+					group_index_answer_rank[0] = *my_group_index;
 					group_index_answer_rank[1] = NO;
 					group_index_answer_rank[2] = rank;
 					printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
 					MPI_Send(&group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 				}
-
+				shmdt(my_group_index);
+                                up(semaphore_my_group_index_id);
 			}
 			else if( status.MPI_TAG == ANSWER)
 			{
+				down(semaphore_my_group_index_id);
+                                my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+
 				answer_count++;
 				if( group_index_answer_rank[1] == YES && invalid == FALSE)
 				{
 					Add_Mate_To_Group( status.MPI_SOURCE, all_mates_in_group, size );
 				}
-				else if( group_index_answer_rank[0] == my_group_index)
+				else if( group_index_answer_rank[0] == *my_group_index)
 				{
-					if( group_index_answer_rank[0] > my_group_index)
+					if( group_index_answer_rank[0] > *my_group_index)
 					{
-						my_group_index = group_index_answer_rank[0];
+						*my_group_index = group_index_answer_rank[0];
 					}
 					invalid = TRUE;
 					memset(all_mates_in_group, -1, sizeof(int)* size);
@@ -242,10 +272,13 @@ int main(int argc, char **argv)
 
 				if(answer_count == size - 1)
 				{
-					//	printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
+					printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
 					answer_count = 0;
 					invalid = FALSE;
-				} 
+				}
+
+				shmdt(my_group_index);
+                                up(semaphore_my_group_index_id);
 			}
 			else{
 				printf("AAAAAAA\n");
