@@ -11,15 +11,15 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 
-#define SEMCOUNT 1
-#define FALSE 0
-#define TRUE 1
-#define ONE_INT 1
-#define THREE_INT 3
-#define WANT_TO_DRINK 1
-#define ANSWER 2
-#define YES 1
-#define NO 0
+#define SEMCOUNT (int)1
+#define FALSE (int)0
+#define TRUE (int)1
+#define ONE_INT (int)1
+#define THREE_INT (int)3
+#define WANT_TO_DRINK (int)1
+#define ANSWER (int)2
+#define YES (int)1
+#define NO (int)0
 
 
 void Send_To_All( int group_index, int size, int my_rank)
@@ -66,7 +66,7 @@ void Add_Mate_To_Group( int mate_rank, int* all_mates, int size)
    group_index = packages[i].group_index;
    break;
    }
-   }
+  }
 
    if( group_index == -1 )
    {
@@ -104,7 +104,7 @@ void up(int semid)
 	buf.sem_num = 0;
 	buf.sem_op = 1;
 	buf.sem_flg = 0;
-//	printf("up %d\n",semop(semid, &buf, 1));
+	//	printf("up %d\n",semop(semid, &buf, 1));
 	semop(semid, &buf, 1);
 }
 
@@ -115,7 +115,7 @@ void down(int semid)
 	buf.sem_op = -1;
 	buf.sem_flg = 0;
 	semop(semid, &buf, 1);
-//	printf("down %d\n", semop(semid, &buf, 1));
+	//	printf("down %d\n", semop(semid, &buf, 1));
 }
 
 int main(int argc, char **argv)
@@ -131,6 +131,7 @@ int main(int argc, char **argv)
 	semctl(semaphore_drink_id, 0, SETVAL, (int)1);
 
 	int *i_want_to_drink;
+
 	i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
 	*i_want_to_drink = -1;
 	shmdt(i_want_to_drink);
@@ -166,12 +167,12 @@ int main(int argc, char **argv)
 		Send_To_All(my_group_index, size, rank); //group_index can be changed, so it is temporary solution
 
 		while(1){}
+		printf("OUT\n");
 		//wait for end
 	}
 	else //child
 	{
 		int group_index_answer_rank[3], answer_count = 0;
-	//	int* i_want_to_drink2;
 		int* all_mates_in_group = malloc(sizeof(int)* size);
 		memset(all_mates_in_group, -1, sizeof(int)* size);
 		int invalid = FALSE;
@@ -180,6 +181,7 @@ int main(int argc, char **argv)
 		{
 			printf("i am waiting, my rank is %d\n", rank);
 			MPI_Recv(group_index_answer_rank, THREE_INT, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
 			printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
 			if( status.MPI_TAG == WANT_TO_DRINK)
 			{
@@ -217,34 +219,33 @@ int main(int argc, char **argv)
 					group_index_answer_rank[1] = NO;
 					group_index_answer_rank[2] = rank;
 					printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+					MPI_Send(&group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 				}
 
 			}
 			else if( status.MPI_TAG == ANSWER)
 			{
-				/*			answer_count++;
-							if( group_index_answer_rank[1] == YES && invalid == FALSE)
-							{
-							Add_Mate_To_Group( status.MPI_SOURCE, all_mates_in_group, size );
-							}
-							else if( group_index_answer_rank[0] == my_group_index)
-							{
-							if( group_index_answer_rank[0] > my_group_index)
-							{
-							my_group_index = group_index_answer_rank[0];
-							}
-							invalid = TRUE;
-							memset(all_mates_in_group, -1, sizeof(int)* size);
-							}
+				answer_count++;
+				if( group_index_answer_rank[1] == YES && invalid == FALSE)
+				{
+					Add_Mate_To_Group( status.MPI_SOURCE, all_mates_in_group, size );
+				}
+				else if( group_index_answer_rank[0] == my_group_index)
+				{
+					if( group_index_answer_rank[0] > my_group_index)
+					{
+						my_group_index = group_index_answer_rank[0];
+					}
+					invalid = TRUE;
+					memset(all_mates_in_group, -1, sizeof(int)* size);
+				}
 
-							if(answer_count == size - 1)
-							{
-				//	printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
-				answer_count = 0;
-				invalid = FALSE;
-				} */
-				// It is comment just to debug segmentation fault
+				if(answer_count == size - 1)
+				{
+					//	printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
+					answer_count = 0;
+					invalid = FALSE;
+				} 
 			}
 			else{
 				printf("AAAAAAA\n");
