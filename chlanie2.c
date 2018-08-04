@@ -55,6 +55,17 @@ void Add_Mate_To_Group( int mate_rank, int* all_mates, int size)
 	}
 }
 
+void Show_Mates( int* all_mates, int size, int my_rank)
+{
+	for( int i = 0; i < size; i++ )
+	{
+		if( all_mates[i] != -1)
+		{
+			printf("My rank is %d, i am with mate %d\n", my_rank, all_mates[i] );
+		}
+	}
+}
+
 /*
    int Check_If_I_Can_Drink(struct package* packages, int size)
    {
@@ -66,7 +77,7 @@ void Add_Mate_To_Group( int mate_rank, int* all_mates, int size)
    group_index = packages[i].group_index;
    break;
    }
-  }
+   }
 
    if( group_index == -1 )
    {
@@ -128,13 +139,13 @@ int main(int argc, char **argv)
 	int my_group_index_id = shmget( IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT );
 
 	int semaphore_my_group_index_id = semget( IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
-        semctl(semaphore_my_group_index_id, 0, SETVAL, (int)1);
-	
+	semctl(semaphore_my_group_index_id, 0, SETVAL, (int)1);
+
 	int *my_group_index;
 
 	my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
-        *my_group_index = 1;
-        shmdt(my_group_index);
+	*my_group_index = 1;
+	shmdt(my_group_index);
 
 
 	int i_want_to_drink_id = shmget( IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT );
@@ -154,6 +165,8 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 	srand(time(0));
+		
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if(fork() != 0) //root
 	{
@@ -177,7 +190,7 @@ int main(int argc, char **argv)
 		printf("Chce pic! %d\n", rank);
 
 		printf("I send to all and wait for all and my rank is %d\n", rank);
-		
+
 		down(semaphore_my_group_index_id);
 		my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
 		int temp = *my_group_index;
@@ -192,9 +205,10 @@ int main(int argc, char **argv)
 	}
 	else //child
 	{
-		int group_index_answer_rank[3], answer_count = 0;
+		int group_index_answer_rank[3], answer_count = 0, am_i_in_group = NO;
 		int* all_mates_in_group = malloc(sizeof(int)* size);
 		memset(all_mates_in_group, -1, sizeof(int)* size);
+	//	printf("%d\n", all_mates_in_group[0]);
 		int invalid = FALSE;
 
 		while(1)
@@ -207,20 +221,26 @@ int main(int argc, char **argv)
 			{
 				down(semaphore_drink_id);
 				i_want_to_drink = (int*) shmat(i_want_to_drink_id, NULL, 0);
-				
+
 				down(semaphore_my_group_index_id);
-                                my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+				my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
 
 				if(*i_want_to_drink == 1)
 				{
 					shmdt(i_want_to_drink);
 					up(semaphore_drink_id);
-					
+
 					group_index_answer_rank[0] = *my_group_index;
 
 					group_index_answer_rank[2] = rank;
 					if( group_index_answer_rank[0] == *my_group_index)
 					{
+						if( am_i_in_group == YES)
+						{
+							Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
+							Show_Mates(all_mates_in_group, size, rank);
+						}
+
 						group_index_answer_rank[1] = YES;
 						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
 						MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
@@ -248,12 +268,13 @@ int main(int argc, char **argv)
 					MPI_Send(&group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 				}
 				shmdt(my_group_index);
-                                up(semaphore_my_group_index_id);
+				up(semaphore_my_group_index_id);
 			}
 			else if( status.MPI_TAG == ANSWER)
 			{
+			//	printf("TAG %d\n",status.MPI_TAG);
 				down(semaphore_my_group_index_id);
-                                my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
+				my_group_index = (int*) shmat(my_group_index_id, NULL, 0);
 
 				answer_count++;
 				if( group_index_answer_rank[1] == YES && invalid == FALSE)
@@ -262,6 +283,7 @@ int main(int argc, char **argv)
 				}
 				else if( group_index_answer_rank[0] == *my_group_index)
 				{
+				//	printf("AAA %d\n", group_index_answer_rank[0]);
 					if( group_index_answer_rank[0] > *my_group_index)
 					{
 						*my_group_index = group_index_answer_rank[0];
@@ -269,16 +291,21 @@ int main(int argc, char **argv)
 					invalid = TRUE;
 					memset(all_mates_in_group, -1, sizeof(int)* size);
 				}
+			//	printf("answer count %d\n", answer_count);
 
 				if(answer_count == size - 1)
 				{
-					printf("My group %d, %d, my rank is %d\n", all_mates_in_group[0], all_mates_in_group[1], rank);
+					if(invalid == FALSE)
+					{
+						Show_Mates(all_mates_in_group, size, rank);
+						am_i_in_group = YES;
+					}
 					answer_count = 0;
 					invalid = FALSE;
 				}
 
 				shmdt(my_group_index);
-                                up(semaphore_my_group_index_id);
+				up(semaphore_my_group_index_id);
 			}
 			else{
 				printf("AAAAAAA\n");
