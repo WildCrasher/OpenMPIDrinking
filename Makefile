@@ -1,9 +1,12 @@
+MPI_COMPILE_FLAGS = $(shell mpicc --showme:compile)
+MPI_LINK_FLAGS = $(shell mpicc --showme:link)
+
 all: run #runwithdebugger
 
 start:
 	@sh ./zabij.sh
 compile: start
-	mpicc -Wall -o chlanie2 chlanie2.c
+	mpicc $(MPI_COMPILE_FLAGS) -Wall chlanie2.c $(MPI_LINK_FLAGS) -o chlanie2
 run: compile
 	mpirun --oversubscribe -np 3 chlanie2
 #runwithdebugger: compile
