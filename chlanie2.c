@@ -263,8 +263,6 @@ int main(int argc, char **argv)
 					group_index_answer_rank[1] = YES;
 					printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
 					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
-					int dupa = 1;
-					MPI_Send(&dupa, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
 				}
 				else
 				{
@@ -275,7 +273,6 @@ int main(int argc, char **argv)
 			}
 			else
 			{
-				printf("dupa\n");
 				shmdt(&i_want_to_drink);
 				up(semaphore_drink_id);
 
