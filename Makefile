@@ -8,7 +8,7 @@ start:
 compile: start
 	mpicc $(MPI_COMPILE_FLAGS) -Wall -g chlanie2.c $(MPI_LINK_FLAGS) -o chlanie2
 run: compile
-	mpirun -np 3 ./chlanie2
+	mpirun -oversubscribe -np 3 ./chlanie2
 clear:
 	rm ./chlanie2
 runwithdebugger: compile

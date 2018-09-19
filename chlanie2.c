@@ -22,6 +22,9 @@
 #define ANSWER (int)2
 #define YES (int)1
 #define NO (int)0
+#define NO_DRINK (int)2
+#define NOT_EQUAL_INDEX (int)3
+#define WE_BEGIN_DRINK (int)4
 
 int my_group_index_id;
 int semaphore_my_group_index_id;
@@ -220,14 +223,14 @@ int main(int argc, char **argv)
 
 	srand(time(0));
 
-	MPI_Barrier(MPI_COMM_WORLD);
+
+	MPI_Barrier(MPI_COMM_WORLD);//pozostalosc po testach, mysle ze mozna to usunac, ale zobaczymy
 
 	pthread_t thread;
 	pthread_create(&thread, NULL, childThread, NULL);
 	int group_index_answer_rank[3], answer_count = 0, am_i_in_group = NO;
 	int *all_mates_in_group = malloc(sizeof(int) * size);
 	memset(all_mates_in_group, -1, sizeof(int) * size);
-	//	printf("%d\n", all_mates_in_group[0]);
 	int invalid = FALSE;
 
 	while (1)
@@ -256,8 +259,8 @@ int main(int argc, char **argv)
 				{
 					if (am_i_in_group == YES)
 					{
-						// Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
-						// Show_Mates(all_mates_in_group, size, rank);
+						Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
+						Show_Mates(all_mates_in_group, size, rank);
 					}
 
 					group_index_answer_rank[1] = YES;
@@ -266,7 +269,7 @@ int main(int argc, char **argv)
 				}
 				else
 				{
-					group_index_answer_rank[1] = NO;
+					group_index_answer_rank[1] = NOT_EQUAL_INDEX;
 					printf("I answer NO2 to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
 					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 				}
@@ -281,7 +284,7 @@ int main(int argc, char **argv)
 					*my_group_index = group_index_answer_rank[0];
 				}
 				group_index_answer_rank[0] = *my_group_index;
-				group_index_answer_rank[1] = NO;
+				group_index_answer_rank[1] = NO_DRINK;
 				group_index_answer_rank[2] = rank;
 				printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
 				MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
@@ -291,7 +294,6 @@ int main(int argc, char **argv)
 		}
 		else if (status.MPI_TAG == ANSWER)
 		{
-			printf("TAG %d\n", status.MPI_TAG);
 			down(semaphore_my_group_index_id);
 			my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
 
@@ -300,17 +302,22 @@ int main(int argc, char **argv)
 			{
 				Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
 			}
-			else if (group_index_answer_rank[0] == *my_group_index)
+			else if (group_index_answer_rank[1] != YES  && invalid == FALSE)
 			{
-				//	printf("AAA %d\n", group_index_answer_rank[0]);
-				if (group_index_answer_rank[0] > *my_group_index)
+				if(group_index_answer_rank[1] == NOT_EQUAL_INDEX)
 				{
 					*my_group_index = group_index_answer_rank[0];
+					invalid = TRUE;
+	                                memset(all_mates_in_group, -1, sizeof(int) * size);
 				}
-				invalid = TRUE;
-				memset(all_mates_in_group, -1, sizeof(int) * size);
+				else if(group_index_answer_rank[1] == WE_BEGIN_DRINK)
+				{
+					*my_group_index = group_index_answer_rank[0] + 1;
+					invalid = TRUE;
+                                	memset(all_mates_in_group, -1, sizeof(int) * size);
+				}
+				
 			}
-			//	printf("answer count %d\n", answer_count);
 
 			if (answer_count == size - 1)
 			{
