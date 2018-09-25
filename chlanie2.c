@@ -129,7 +129,6 @@ void Send_Trigger_To_Myself(int my_rank)
 	group_index_answer_rank[1] = YES;
 	group_index_answer_rank[2] = my_rank;
 
-	// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, my_rank, TRIGGER, MPI_COMM_WORLD);
 	sendInt(group_index_answer_rank, STRUCTURE_SIZE, my_rank, TRIGGER);
 	printf("Trigger sent, my rank is %d\n", my_rank);
 }
@@ -145,7 +144,8 @@ void Send_To_All_Start_Drinking(int *all_mates, int size, int my_rank)
 	{
 		if (all_mates[i] != -1)
 		{
-			MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, my_rank, START_DRINKING, MPI_COMM_WORLD);
+			// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, my_rank, START_DRINKING, MPI_COMM_WORLD);
+			sendInt(group_index_answer_rank, STRUCTURE_SIZE, my_rank, START_DRINKING);
 		}
 	}
 }
@@ -162,8 +162,8 @@ void Send_To_All_My_Ranks(int *all_mates, int size, int my_rank)
 		int other_rank = all_mates[i];
 		if (all_mates[i] != -1)
 		{
-			sendInt(group_index_answer_rank, THREE_INT, my_rank, GATHER_RANKS);
-			sendInt(all_mates, size, other_rank, tag);
+			sendInt(group_index_answer_rank, STRUCTURE_SIZE, my_rank, GATHER_RANKS);
+			sendInt(all_mates, size, other_rank, ARRAY);
 		}
 
 		// printf("I sent to %d and my rank is %d\n", i, my_rank);
@@ -481,20 +481,19 @@ int main(int argc, char **argv)
 				{
 					if (group_index_answer_rank[0] == *my_group_index)
 					{
-						//	down(semaphore_am_i_in_group_id);
-						//	am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-						/*				down(semaphore_all_mates_id);
-							all_mates = (int *)shmat(all_mates_id, NULL, 0);
-							Add_Mate_To_Group(status.MPI_SOURCE, all_mates, size);
-							Show_Mates(all_mates, size, rank);
-							shmdt(all_mates);
-							up(semaphore_all_mates_id);*/
-						//	shmdt(am_i_in_group);
-						//	up(semaphore_am_i_in_group_id);
+						down(semaphore_am_i_in_group_id);
+						am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
+						down(semaphore_all_mates_id);
+						all_mates = (int *)shmat(all_mates_id, NULL, 0);
+						Add_Mate_To_Group(status.MPI_SOURCE, all_mates, size);
+						Show_Mates(all_mates, size, rank);
+						shmdt(all_mates);
+						up(semaphore_all_mates_id);
+						shmdt(am_i_in_group);
+						up(semaphore_am_i_in_group_id);
 
 						group_index_answer_rank[1] = YES;
 						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-						// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
 						sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
 					}
 					else
@@ -610,7 +609,8 @@ int main(int argc, char **argv)
 			start_drinking = YES;
 			answer_count_gather++;
 
-			MPI_Recv(all_mates_temp, size, MPI_INT, MPI_ANY_SOURCE, ARRAY, MPI_COMM_WORLD, &status);
+			// MPI_Recv(all_mates_temp, size, MPI_INT, MPI_ANY_SOURCE, ARRAY, MPI_COMM_WORLD, &status);
+			recvInt(all_mates_temp, size, MPI_ANY_SOURCE, ARRAY, &status);
 
 			down(semaphore_all_mates_id);
 			all_mates = (int *)shmat(all_mates_id, NULL, 0);
