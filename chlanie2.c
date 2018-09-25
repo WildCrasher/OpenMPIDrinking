@@ -379,11 +379,11 @@ int main(int argc, char **argv)
 						am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
 						if (*am_i_in_group == YES)
 						{
-							shmdt(am_i_in_group);
-							up(semaphore_am_i_in_group_id);
 							Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
 							Show_Mates(all_mates_in_group, size, rank);
 						}
+						shmdt(am_i_in_group);
+						up(semaphore_am_i_in_group_id);
 
 						group_index_answer_rank[1] = YES;
 						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
