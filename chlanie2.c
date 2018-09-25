@@ -226,7 +226,6 @@ void *childThread()
 	down(semaphore_am_i_in_group_id);
 	am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
 
-	// // perror("iwant\n");
 	while (*am_i_in_group != YES)
 	{
 		shmdt(am_i_in_group);
@@ -269,10 +268,10 @@ void *childThread()
 		shmdt(someone_decided);
 		up(semaphore_someone_decided_id);
 		sleep(0.8);
-	}*/
+	}
 
 	printf("Start drinking\n");
-
+*/
 	while (1)
 	{
 	}
@@ -353,7 +352,6 @@ int main(int argc, char **argv)
 
 	while (1)
 	{
-		printf("i am waiting, my rank is %d\n", rank);
 		MPI_Recv(group_index_answer_rank, THREE_INT, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
 		printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
@@ -365,7 +363,7 @@ int main(int argc, char **argv)
 			down(semaphore_my_group_index_id);
 			my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
 
-			if (*i_want_to_drink == 1)
+			if (*i_want_to_drink == YES)
 			{
 				shmdt(i_want_to_drink);
 				up(semaphore_drink_id);
@@ -375,7 +373,6 @@ int main(int argc, char **argv)
 
 				if (start_drinking == NO)
 				{
-					//	perror("iwant\n");
 					if (group_index_answer_rank[0] == *my_group_index)
 					{
 						down(semaphore_am_i_in_group_id);
@@ -438,7 +435,8 @@ int main(int argc, char **argv)
 			{
 				if (group_index_answer_rank[1] == NOT_EQUAL_INDEX)
 				{
-					*my_group_index = group_index_answer_rank[0];
+					if( *my_group_index < group_index_answer_rank[0])
+						*my_group_index = group_index_answer_rank[0];
 					invalid = TRUE;
 					memset(all_mates_in_group, -1, sizeof(int) * size);
 				}
@@ -457,7 +455,7 @@ int main(int argc, char **argv)
 					printf("All answers came:\n");
 					Show_Mates(all_mates_in_group, size, rank);
 
-					down(semaphore_my_group_index_id);
+					down(semaphore_am_i_in_group_id);
 					am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
 					*am_i_in_group = YES;
 					shmdt(am_i_in_group);
