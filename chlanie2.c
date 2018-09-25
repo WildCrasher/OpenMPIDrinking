@@ -170,10 +170,31 @@ void Send_To_All_My_Ranks(int *all_mates, int size, int my_rank)
 	}
 }
 
-int *Leave_Only_Common_Ranks(int *original_mates, int *received_mates, int size)
+int* Leave_Only_Common_Ranks(int *original_mates, int *received_mates, int size)
 {
+	int control = 0;
+	int *common_mates;
+	common_mates = malloc(size * sizeof(int));
+	memset(common_mates, -1, size * sizeof(int));
 
-	return original_mates;
+	for (int i = 0; i < size; i++)
+        {
+		for(int j = i + 1; j < size; j++)
+		{
+			if(original_mates[i] == received_mates[j])
+			{
+				control = 1;
+				break;
+			}
+		}
+
+		if(control == 1)
+		{
+			common_mates[i] = original_mates[i];
+			control = 0;
+		}
+	}
+	return common_mates;
 }
 
 void Add_Mate_To_Group(int mate_rank, int *all_mates, int size)
@@ -438,7 +459,6 @@ int main(int argc, char **argv)
 
 	int *all_mates;
 	all_mates_id = shmget(IPC_PRIVATE, size * sizeof(int), 0777 | IPC_CREAT);
-	perror("shmget");
 	all_mates = (int *)shmat(all_mates_id, NULL, 0);
 	memset(all_mates, -1, sizeof(int) * size);
 	shmdt(all_mates);
@@ -447,6 +467,7 @@ int main(int argc, char **argv)
 
 	MPI_Barrier(MPI_COMM_WORLD); //pozostalosc po testach, mysle ze mozna to usunac, ale zobaczymy
 
+	
 	pthread_t thread;
 	pthread_create(&thread, NULL, childThread, NULL);
 	int group_index_answer_rank[STRUCTURE_SIZE], answer_count = 0, answer_count_gather = 0;
@@ -621,8 +642,7 @@ int main(int argc, char **argv)
 			up(semaphore_all_mates_id);
 		}
 	}
-	// printf("WAIT\n");
-	// wait(0);
+	printf("I remove shm and semaphores\n");
 	pthread_join(thread, NULL);
 	semctl(semaphore_drink_id, 0, IPC_RMID);
 	shmctl(i_want_to_drink_id, IPC_RMID, NULL);
