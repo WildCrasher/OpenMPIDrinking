@@ -165,7 +165,7 @@ void Send_To_All_My_Ranks(int *all_mates, int size, int my_rank)
 			sendInt(group_index_answer_rank, THREE_INT, my_rank, GATHER_RANKS);
 			sendInt(all_mates, size, other_rank, tag);
 		}
-		
+
 		// printf("I sent to %d and my rank is %d\n", i, my_rank);
 	}
 }
@@ -340,20 +340,20 @@ void *childThread()
 	int i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
 	printf("can_decide = %d and my rank is %d\n", i_can_decide, rank);
 	int start_drinking = NO;
-	while(i_can_decide == YES && start_drinking != YES)
+	while (i_can_decide == YES && start_drinking != YES)
 	{
 		printf("I am here and my rank is %d\n", rank);
 		start_drinking = rand() % 100;
 		printf("START DRINKING = %d\n", start_drinking);
-		if(start_drinking == YES)
-        	{
+		if (start_drinking == YES)
+		{
 			printf("I DECIDED and my rank is %d\n", rank);
-                	Send_Trigger_To_Myself(rank);
+			Send_Trigger_To_Myself(rank);
 			break;
-        	}
+		}
 
 		shmdt(all_mates);
-        	up(semaphore_all_mates_id);
+		up(semaphore_all_mates_id);
 		sleep(0.8);
 
 		down(semaphore_all_mates_id);
@@ -364,7 +364,7 @@ void *childThread()
 	shmdt(all_mates);
 	up(semaphore_all_mates_id);
 
-	if(start_drinking == YES)
+	if (start_drinking == YES)
 	{
 		printf("Start drinking\n");
 	}
@@ -429,37 +429,19 @@ int main(int argc, char **argv)
 	*am_i_in_group = NO;
 	shmdt(am_i_in_group);
 
-<<<<<<< HEAD
-=======
-
-
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-
->>>>>>> 0e927bad92b26992a8a42d662a1dc093f5e10eea
 	semaphore_all_mates_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_all_mates_id, 0, SETVAL, (int)1);
 
-<<<<<<< HEAD
 	int *all_mates;
 	all_mates_id = shmget(IPC_PRIVATE, size * sizeof(int), 0777 | IPC_CREAT);
 	perror("shmget");
 	all_mates = (int *)shmat(all_mates_id, NULL, 0);
-	// memset(all_mates, -1, sizeof(int) * size);
-	//	Show_Mates(all_mates, size, rank);
-	printf("%d\n", all_mates[0]);
+	memset(all_mates, -1, sizeof(int) * size);
 	shmdt(all_mates);
-=======
-        int *all_mates;
-        all_mates_id = shmget(IPC_PRIVATE, size * sizeof(int), 0777 | IPC_CREAT);
-        perror("shmget");
-        all_mates = (int *)shmat(all_mates_id, NULL, 0);
-        memset(all_mates, -1, sizeof(int) * size);
-        shmdt(all_mates);
->>>>>>> 0e927bad92b26992a8a42d662a1dc093f5e10eea
-
 
 	srand(time(0));
 
