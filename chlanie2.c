@@ -19,7 +19,7 @@
 #define TRUE (int)1
 #define ONE_INT (int)1
 #define STRUCTURE_SIZE (int)4
-#define ARBITER_SIZE (int) 3
+#define ARBITER_SIZE (int)1
 
 //tags
 #define WANT_TO_DRINK (int)1
@@ -27,6 +27,7 @@
 #define TRIGGER (int)3
 #define START_DRINKING (int)4
 #define GATHER_RANKS (int)5
+#define ARBITER_REQUEST (int)6
 
 //answers
 #define YES (int)1
@@ -39,6 +40,11 @@
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
+
+#define min(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
 
 int my_group_index_id;
 int semaphore_my_group_index_id;
@@ -57,19 +63,59 @@ int semaphore_clock_id;
 
 int size, rank, range;
 
-void Send_To_All(int group_index, int size, int my_rank)
+void up(int semid)
 {
-	int group_index_answer_rank[STRUCTURE_SIZE];
-	group_index_answer_rank[0] = group_index;
-	group_index_answer_rank[1] = YES;
-	group_index_answer_rank[2] = my_rank;
+	struct sembuf buf;
+	buf.sem_num = 0;
+	buf.sem_op = 1;
+	buf.sem_flg = 0;
+	//	printf("up %d\n",semop(semid, &buf, 1));
+	semop(semid, &buf, 1);
+}
 
+void down(int semid)
+{
+	struct sembuf buf;
+	buf.sem_num = 0;
+	buf.sem_op = -1;
+	buf.sem_flg = 0;
+	semop(semid, &buf, 1);
+	//	printf("down %d\n", semop(semid, &buf, 1));
+}
+
+int sendInt(int * data, int size, int destination, int tag) 
+{
+	int * buf = malloc((size + 1) * sizeof(int));
+	memcpy(buf, data, size * sizeof(int));
+	down(semaphore_clock_id);
+	int *clock  = (int *)shmat(clock_id, NULL, 0);
+	(*clock)++;
+	printf("clock = %d\n", *clock);
+	memcpy(buf + size, clock, sizeof(int));
+	shmdt(clock);
+	up(semaphore_clock_id);
+	return MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
+}
+
+int recvInt(int * data, int size, int source, int tag, MPI_Status * status) 
+{
+	int ret = MPI_Recv(data, size + 1, MPI_INT, source, tag, MPI_COMM_WORLD, status);
+	down(semaphore_clock_id);
+	int *clock  = (int *)shmat(clock_id, NULL, 0);
+	*clock = max(*clock, data[size]) + 1;
+	printf("clock = %d\n", *clock);
+	shmdt(clock);
+	up(semaphore_clock_id);
+	return ret;
+}
+
+void Send_To_All(int * buf, int size, int my_rank, int tag)
+{
 	for (int i = 0; i < size; i++)
 	{
 		if (i != my_rank)
 		{
-			// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, i, WANT_TO_DRINK, MPI_COMM_WORLD);
-			sendInt(group_index_answer_rank, STRUCTURE_SIZE, i, WANT_TO_DRINK);
+			sendInt(buf, STRUCTURE_SIZE, i, tag);
 			printf("I sent to %d and my rank is %d\n", i, my_rank);
 		}
 	}
@@ -166,26 +212,6 @@ void Show_Mates(int *all_mates, int size, int my_rank)
 // 	}
 // }
 
-void up(int semid)
-{
-	struct sembuf buf;
-	buf.sem_num = 0;
-	buf.sem_op = 1;
-	buf.sem_flg = 0;
-	//	printf("up %d\n",semop(semid, &buf, 1));
-	semop(semid, &buf, 1);
-}
-
-void down(int semid)
-{
-	struct sembuf buf;
-	buf.sem_num = 0;
-	buf.sem_op = -1;
-	buf.sem_flg = 0;
-	semop(semid, &buf, 1);
-	//	printf("down %d\n", semop(semid, &buf, 1));
-}
-
 int Get_My_Group_Index()
 {
 	int *my_group_index;
@@ -197,32 +223,6 @@ int Get_My_Group_Index()
 	up(semaphore_my_group_index_id);
 
 	return group_index;
-}
-
-int sendInt(int * data, int size, int destination, int tag) 
-{
-	int * buf = malloc((size + 1) * sizeof(int));
-	memcpy(buf, data, size * sizeof(int));
-	down(semaphore_clock_id);
-	int *clock  = (int *)shmat(clock_id, NULL, 0);
-	(*clock)++;
-	printf("clock = %d\n", *clock);
-	memcpy(buf + size, clock, sizeof(int));
-	shmdt(clock);
-	up(semaphore_clock_id);
-	return MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
-}
-
-int recvInt(int * data, int size, int source, int tag, MPI_Status * status) 
-{
-	int ret = MPI_Recv(data, size + 1, MPI_INT, source, tag, MPI_COMM_WORLD, status);
-	down(semaphore_clock_id);
-	int *clock  = (int *)shmat(clock_id, NULL, 0);
-	*clock = max(*clock, data[size]) + 1;
-	printf("clock = %d\n", *clock);
-	shmdt(clock);
-	up(semaphore_clock_id);
-	return ret;
 }
 
 void *childThread()
@@ -259,7 +259,11 @@ void *childThread()
 
 	int group_index = Get_My_Group_Index();
 
-	Send_To_All(group_index, size, rank);
+	int group_index_answer_rank[STRUCTURE_SIZE];
+	group_index_answer_rank[0] = group_index;
+	group_index_answer_rank[1] = YES;
+	group_index_answer_rank[2] = rank;
+	Send_To_All(group_index_answer_rank, size, rank, WANT_TO_DRINK);
 
 	down(semaphore_am_i_in_group_id);
 	am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
@@ -278,8 +282,9 @@ void *childThread()
 
 	// perror("am_i_in_group_error\n");
 
-	/*
+	
 	int start_drinking = NO;
+	/*
 	while(start_drinking == NO)
 	{
 		start_drinking = rand() % 100;
@@ -307,13 +312,9 @@ void *childThread()
 		up(semaphore_someone_decided_id);
 		sleep(0.8);
 	}
-
-	printf("Start drinking\n");
 */
-	while (1)
-	{
-	}
-	// wait for end
+	Send_To_All(&rank, 1, rank, ARBITER_REQUEST);
+	while(1);
 	return NULL;
 }
 
