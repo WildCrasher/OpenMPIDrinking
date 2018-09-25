@@ -66,10 +66,10 @@ void Send_To_All(int group_index, int size, int my_rank)
 	}
 }
 
-void Send_Trigger_To_Myself(int group_index, int size, int my_rank)
+void Send_Trigger_To_Myself(int my_rank)
 {
 	int group_index_answer_rank[3];
-	group_index_answer_rank[0] = group_index;
+	group_index_answer_rank[0] = -1;
 	group_index_answer_rank[1] = YES;
 	group_index_answer_rank[2] = my_rank;
 
@@ -294,20 +294,21 @@ void *childThread()
 	up(semaphore_am_i_in_group_id);
 
 	// perror("am_i_in_group_error\n");
-/*
+
 	down(semaphore_all_mates_id);
 	all_mates = (int *)shmat(all_mates_id, NULL, 0);
 	int i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
-
+	printf("can_decide = %d and my rank is %d\n", i_can_decide, rank);
 	int start_drinking = NO;
-	while(i_can_decide == YES && start_drinking == NO)
+	while(i_can_decide == YES && start_drinking != YES)
 	{
+		printf("I am here and my rank is %d\n", rank);
 		start_drinking = rand() % 100;
-
+		printf("START DRINKING = %d\n", start_drinking);
 		if(start_drinking == YES)
         	{
-                	group_index = Get_My_Group_Index();
-                	Send_Trigger_To_Myself(group_index, size, rank);
+			printf("I DECIDED and my rank is %d\n", rank);
+                	Send_Trigger_To_Myself(rank);
 			break;
         	}
 
@@ -329,9 +330,9 @@ void *childThread()
 	}
 	else
 	{
-		printf("Waiting for decision\n");
+		printf("Waiting for decision and my rank is %d\n", rank);
 	}
-*/
+
 	while (1)
 	{
 	}
@@ -383,21 +384,21 @@ int main(int argc, char **argv)
 
 
 
+	MPI_Status status;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+
 	semaphore_all_mates_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
         semctl(semaphore_all_mates_id, 0, SETVAL, (int)1);
 
         int *all_mates;
         all_mates_id = shmget(IPC_PRIVATE, size * sizeof(int), 0777 | IPC_CREAT);
-	perror("shmget");
+        perror("shmget");
         all_mates = (int *)shmat(all_mates_id, NULL, 0);
-       // memset(all_mates, -1, sizeof(int) * size);
-//	Show_Mates(all_mates, size, rank);
-	printf("%d\n", all_mates[0]);
+        memset(all_mates, -1, sizeof(int) * size);
         shmdt(all_mates);
 
-	MPI_Status status;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 	srand(time(0));
 
