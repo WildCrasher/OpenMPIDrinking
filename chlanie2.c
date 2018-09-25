@@ -18,7 +18,8 @@
 #define FALSE (int)0
 #define TRUE (int)1
 #define ONE_INT (int)1
-#define THREE_INT (int)3
+#define STRUCTURE_SIZE (int)4
+#define ARBITER_SIZE (int) 3
 
 //tags
 #define WANT_TO_DRINK (int)1
@@ -34,6 +35,11 @@
 #define NOT_EQUAL_INDEX (int)3
 #define WE_BEGIN_DRINK (int)4
 
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
 int my_group_index_id;
 int semaphore_my_group_index_id;
 
@@ -46,11 +52,14 @@ int semaphore_am_i_in_group_id;
 int someone_decided_id;
 int semaphore_someone_decided_id;
 
+int clock_id;
+int semaphore_clock_id;
+
 int size, rank, range;
 
 void Send_To_All(int group_index, int size, int my_rank)
 {
-	int group_index_answer_rank[3];
+	int group_index_answer_rank[STRUCTURE_SIZE];
 	group_index_answer_rank[0] = group_index;
 	group_index_answer_rank[1] = YES;
 	group_index_answer_rank[2] = my_rank;
@@ -59,7 +68,8 @@ void Send_To_All(int group_index, int size, int my_rank)
 	{
 		if (i != my_rank)
 		{
-			MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, i, WANT_TO_DRINK, MPI_COMM_WORLD);
+			// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, i, WANT_TO_DRINK, MPI_COMM_WORLD);
+			sendInt(group_index_answer_rank, STRUCTURE_SIZE, i, WANT_TO_DRINK);
 			printf("I sent to %d and my rank is %d\n", i, my_rank);
 		}
 	}
@@ -67,12 +77,13 @@ void Send_To_All(int group_index, int size, int my_rank)
 
 void Send_Trigger_To_Myself(int group_index, int size, int my_rank)
 {
-	int group_index_answer_rank[3];
+	int group_index_answer_rank[STRUCTURE_SIZE];
 	group_index_answer_rank[0] = group_index;
 	group_index_answer_rank[1] = YES;
 	group_index_answer_rank[2] = my_rank;
 
-	MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, my_rank, TRIGGER, MPI_COMM_WORLD);
+	// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, my_rank, TRIGGER, MPI_COMM_WORLD);
+	sendInt(group_index_answer_rank, STRUCTURE_SIZE, my_rank, TRIGGER);
 	printf("Trigger sent, my rank is %d\n", my_rank);
 }
 
@@ -81,7 +92,8 @@ void Send_To_All_My_Ranks(int *all_mates, int size, int my_rank, int tag)
 	for (int i = 0; i < size; i++)
 	{
 		int other_rank = all_mates[i];
-		MPI_Send(all_mates, size, MPI_INT, other_rank, tag, MPI_COMM_WORLD);
+		// MPI_Send(all_mates, size, MPI_INT, other_rank, tag, MPI_COMM_WORLD);
+		sendInt(all_mates, size, other_rank, tag);
 		// printf("I sent to %d and my rank is %d\n", i, my_rank);
 	}
 }
@@ -185,6 +197,32 @@ int Get_My_Group_Index()
 	up(semaphore_my_group_index_id);
 
 	return group_index;
+}
+
+int sendInt(int * data, int size, int destination, int tag) 
+{
+	int * buf = malloc((size + 1) * sizeof(int));
+	memcpy(buf, data, size * sizeof(int));
+	down(semaphore_clock_id);
+	int *clock  = (int *)shmat(clock_id, NULL, 0);
+	(*clock)++;
+	printf("clock = %d\n", *clock);
+	memcpy(buf + size, clock, sizeof(int));
+	shmdt(clock);
+	up(semaphore_clock_id);
+	return MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
+}
+
+int recvInt(int * data, int size, int source, int tag, MPI_Status * status) 
+{
+	int ret = MPI_Recv(data, size + 1, MPI_INT, source, tag, MPI_COMM_WORLD, status);
+	down(semaphore_clock_id);
+	int *clock  = (int *)shmat(clock_id, NULL, 0);
+	*clock = max(*clock, data[size]) + 1;
+	printf("clock = %d\n", *clock);
+	shmdt(clock);
+	up(semaphore_clock_id);
+	return ret;
 }
 
 void *childThread()
@@ -299,6 +337,17 @@ int main(int argc, char **argv)
 	*my_group_index = 1;
 	shmdt(my_group_index);
 
+	clock_id = shmget(IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT);
+
+	semaphore_clock_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
+	semctl(semaphore_clock_id, 0, SETVAL, (int)1);
+
+	int *clock;
+
+	clock = (int *)shmat(clock_id, NULL, 0);
+	*clock = 0;
+	shmdt(clock);
+
 	i_want_to_drink_id = shmget(IPC_PRIVATE, sizeof(int), 0777 | IPC_CREAT);
 	// perror("i_want_to_drink_id error");
 	// printf("%d\n", i_want_to_drink_id);
@@ -344,7 +393,7 @@ int main(int argc, char **argv)
 
 	pthread_t thread;
 	pthread_create(&thread, NULL, childThread, NULL);
-	int group_index_answer_rank[3], answer_count = 0;
+	int group_index_answer_rank[STRUCTURE_SIZE], answer_count = 0;
 	int *all_mates_in_group = malloc(sizeof(int) * size);
 	memset(all_mates_in_group, -1, sizeof(int) * size);
 	int invalid = FALSE;
@@ -352,7 +401,7 @@ int main(int argc, char **argv)
 
 	while (1)
 	{
-		MPI_Recv(group_index_answer_rank, THREE_INT, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		recvInt(group_index_answer_rank, STRUCTURE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
 		printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
 		if (status.MPI_TAG == WANT_TO_DRINK)
@@ -377,30 +426,28 @@ int main(int argc, char **argv)
 					{
 						down(semaphore_am_i_in_group_id);
 						am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-						if (*am_i_in_group == YES)
-						{
-							Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
-							Show_Mates(all_mates_in_group, size, rank);
-						}
+						Add_Mate_To_Group(status.MPI_SOURCE, all_mates_in_group, size);
+						Show_Mates(all_mates_in_group, size, rank);
 						shmdt(am_i_in_group);
 						up(semaphore_am_i_in_group_id);
 
 						group_index_answer_rank[1] = YES;
 						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-						MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+						// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+						sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
 					}
 					else
 					{
 						group_index_answer_rank[1] = NOT_EQUAL_INDEX;
 						printf("I answer NO2 to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-						MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+						sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
 					}
 				}
 				else
 				{
 					group_index_answer_rank[1] = WE_BEGIN_DRINK;
 					printf("I answer NO3 to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-					MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+					sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
 				}
 			}
 			else
@@ -416,7 +463,7 @@ int main(int argc, char **argv)
 				group_index_answer_rank[1] = NO_DRINK;
 				group_index_answer_rank[2] = rank;
 				printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-				MPI_Send(group_index_answer_rank, THREE_INT, MPI_INT, status.MPI_SOURCE, ANSWER, MPI_COMM_WORLD);
+				sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
 			}
 			shmdt(my_group_index);
 			up(semaphore_my_group_index_id);
