@@ -367,38 +367,62 @@ void *childThread()
 	shmdt(am_i_in_group);
 	up(semaphore_am_i_in_group_id);
 
-	// perror("am_i_in_group_error\n");
-	down(semaphore_all_mates_id);
-	all_mates = (int *)shmat(all_mates_id, NULL, 0);
-	int i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
-	printf("can_decide = %d and my rank is %d\n", i_can_decide, rank);
 
 	int start_drinking = NO;
 
-	while (i_can_decide == YES && start_drinking != YES)
+	if(rank == 0)
 	{
-		//		printf("I am here and my rank is %d\n", rank);
-		start_drinking = rand() % 100;
-		//		printf("START DRINKING = %d\n", start_drinking);
-		if (start_drinking == YES)
+		while (start_drinking != YES)
 		{
-			printf("I DECIDED and my rank is %d\n", rank);
-			int group_index = Get_My_Group_Index();
-			Send_Trigger_To_Myself(rank, group_index);
-			break;
+			//              printf("I am here and my rank is %d\n", rank);
+			start_drinking = rand() % 100;
+			//              printf("START DRINKING = %d\n", start_drinking);
+			if (start_drinking == YES)
+			{
+				printf("I DECIDED and my rank is %d\n", rank);
+				int group_index = Get_My_Group_Index();
+				Send_Trigger_To_Myself(rank, group_index);
+				break;
+			}
+
+			sleep(0.8);
 		}
+	}
 
-		shmdt(all_mates);
-		up(semaphore_all_mates_id);
-		sleep(0.8);
-
-		down(semaphore_all_mates_id);
+	// perror("am_i_in_group_error\n");
+	/*	down(semaphore_all_mates_id);
 		all_mates = (int *)shmat(all_mates_id, NULL, 0);
-		i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
+
+		int i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
+		printf("can_decide = %d and my rank is %d\n", i_can_decide, rank);
+
+		int start_drinking = NO;
+
+		while (i_can_decide == YES && start_drinking != YES)
+		{
+	//		printf("I am here and my rank is %d\n", rank);
+	start_drinking = rand() % 100;
+	//		printf("START DRINKING = %d\n", start_drinking);
+	if (start_drinking == YES)
+	{
+	printf("I DECIDED and my rank is %d\n", rank);
+	int group_index = Get_My_Group_Index();
+	Send_Trigger_To_Myself(rank, group_index);
+	break;
 	}
 
 	shmdt(all_mates);
 	up(semaphore_all_mates_id);
+	sleep(0.8);
+
+	down(semaphore_all_mates_id);
+	all_mates = (int *)shmat(all_mates_id, NULL, 0);
+	i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
+	}
+
+	shmdt(all_mates);
+	up(semaphore_all_mates_id);
+	*/
 
 	if (start_drinking == YES)
 	{
