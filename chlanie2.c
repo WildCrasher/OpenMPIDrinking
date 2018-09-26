@@ -389,6 +389,44 @@ void *childThread()
 		}
 	}
 
+/*
+	int i_can_decide;
+
+	int start_drinking = NO;
+
+	down(semaphore_all_mates_id);
+                all_mates = (int *)shmat(all_mates_id, NULL, 0);
+	if(Get_Mates_Count(all_mates, size) == 1 || Check_If_I_Can_Decide(all_mates, size, rank) == YES)
+	{
+		i_can_decide = YES;
+	}
+	else
+	{
+		i_can_decide = NO;
+
+	}
+	shmdt(all_mates);
+        up(semaphore_all_mates_id);
+
+	if( i_can_decide == YES)
+	{
+		while (start_drinking != YES)
+                {
+                                      printf("I am here and my rank is %d\n", rank);
+                        start_drinking = rand() % 100;
+                        //              printf("START DRINKING = %d\n", start_drinking);
+                        if (start_drinking == YES)
+                        {
+                                printf("I DECIDED and my rank is %d\n", rank);
+                                int group_index = Get_My_Group_Index();
+                                Send_Trigger_To_Myself(rank, group_index);
+                                break;
+                        }
+
+                        sleep(0.8);
+                }
+	}
+	*/
 	// perror("am_i_in_group_error\n");
 	/*	down(semaphore_all_mates_id);
 		all_mates = (int *)shmat(all_mates_id, NULL, 0);
@@ -744,7 +782,7 @@ int main(int argc, char **argv)
 				start_drinking = YES;
 				answer_count_gather++;
 
-				printf("Merging my rank is %d\n", rank);
+				printf("Merging DUPA my rank is %d\n", rank);
 
 				if(all_mates_temp[size] != I_AM_NOT_IN_GROUP)
 				{
