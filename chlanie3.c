@@ -103,6 +103,8 @@ void Send_To_All(int *buf, int size, int my_rank, int tag)
 
 void *childThread()
 {
+	sleep(1);
+
 	return NULL;
 }
 
@@ -140,7 +142,10 @@ int main(int argc, char **argv)
 
 		recvInt(&message, message_size, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-		if(status.MPI_TAG == )
+		if(status.MPI_TAG == ARBITER_REQUEST)
+		{
+			
+		}
 
 		printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
 
