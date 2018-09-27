@@ -6,10 +6,10 @@ all: run #runwithdebugger
 start:
 	@sh ./zabij.sh
 compile: start
-	mpicc $(MPI_COMPILE_FLAGS) -Wall -g chlanie2.c $(MPI_LINK_FLAGS) -o chlanie2
+	mpicc $(MPI_COMPILE_FLAGS) -Wall -g chlanie3.c $(MPI_LINK_FLAGS) -o chlanie3
 run: compile
-	mpirun -oversubscribe -np 3 ./chlanie2
+	mpirun -np 3 ./chlanie3
 clear:
-	rm ./chlanie2
+	rm ./chlanie3
 runwithdebugger: compile
-	mpirun -oversubscribe -np 3 xterm -e gdb -ex run --args ./chlanie2
+	mpirun -np 3 xterm -e gdb -ex run --args ./chlanie3

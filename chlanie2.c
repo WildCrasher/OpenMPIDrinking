@@ -367,7 +367,7 @@ void *childThread()
 	shmdt(am_i_in_group);
 	up(semaphore_am_i_in_group_id);
 
-
+/*
 	int start_drinking = NO;
 
 	if(rank == 0)
@@ -388,8 +388,8 @@ void *childThread()
 			sleep(0.8);
 		}
 	}
+*/
 
-/*
 	int i_can_decide;
 
 	int start_drinking = NO;
@@ -426,7 +426,7 @@ void *childThread()
                         sleep(0.8);
                 }
 	}
-	*/
+	
 	// perror("am_i_in_group_error\n");
 	/*	down(semaphore_all_mates_id);
 		all_mates = (int *)shmat(all_mates_id, NULL, 0);
