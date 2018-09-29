@@ -18,26 +18,25 @@
 #define FALSE (int)0
 #define TRUE (int)1
 #define ONE_INT (int)1
-#define STRUCTURE_SIZE (int)3
+#define MESSAGE_SIZE (int)1
 #define ARBITER_SIZE (int)1
 
 //tags
-#define WANT_TO_DRINK (int)1
+#define GROUP_INDEX (int)1
 #define ANSWER (int)2
 #define TRIGGER (int)3
-#define START_DRINKING (int)4
-#define GATHER_RANKS (int)5
-#define ARRAY (int)6
-#define ARBITER_REQUEST (int)7
+#define ARBITER_REQUEST (int)4
+#define START_DRINKING (int)5
 
 //answers
 #define NO (int)0
 #define YES (int)1
 #define DOES_NOT_MATTER (int)2
-#define NO_DRINK (int)3
-#define NOT_EQUAL_INDEX (int)4
-#define WE_BEGIN_DRINK (int)5
-#define I_AM_NOT_IN_GROUP (int)-100
+
+//states of group_indexes
+#define NULL_UNIQUE (int)0
+#define ONE_UNIQUE (int)1
+#define TWO_OR_MORE_UNIQUES (int)2
 
 #define max(a, b) \
 	({ __typeof__ (a) _a = (a); \
@@ -52,9 +51,6 @@
 int my_group_index_id;
 int semaphore_my_group_index_id;
 
-int i_want_to_drink_id;
-int semaphore_drink_id;
-
 int am_i_in_group_id;
 int semaphore_am_i_in_group_id;
 
@@ -64,7 +60,12 @@ int semaphore_all_mates_id;
 int clock_id;
 int semaphore_clock_id;
 
+int my_group_index, am_i_in_group;
+int *lamport_clock;
+
 int size, rank, range;
+
+int *my_group;
 
 void up(int semid)
 {
@@ -91,11 +92,9 @@ int sendInt(int *data, int size, int destination, int tag)
 	int *buf = malloc((size + 1) * sizeof(int));
 	memcpy(buf, data, size * sizeof(int));
 	down(semaphore_clock_id);
-	int *clock = (int *)shmat(clock_id, NULL, 0);
-	(*clock)++;
+	(*lamport_clock)++;
 	//	printf("clock = %d\n", *clock);
-	memcpy(buf + size, clock, sizeof(int));
-	shmdt(clock);
+	memcpy(buf + size, lamport_clock, sizeof(int));
 	up(semaphore_clock_id);
 	return MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 }
@@ -107,151 +106,27 @@ int recvInt(int *data, int size, int source, int tag, MPI_Status *status)
 	int ret = MPI_Recv(buf, size + 1, MPI_INT, source, tag, MPI_COMM_WORLD, status);
 
 	down(semaphore_clock_id);
-	int *clock = (int *)shmat(clock_id, NULL, 0);
-	*clock = max(*clock, buf[size]) + 1;
-	printf("clock = %d\n", *clock);
-	shmdt(clock);
+	*lamport_clock = max(*lamport_clock, buf[size]) + 1;
+	printf("clock = %d\n", *lamport_clock);
 	up(semaphore_clock_id);
 	memcpy(data, buf, size * sizeof(int));
 	free(buf);
 	return ret;
-	/*	int ret = MPI_Recv(data, size + 1, MPI_INT, source, tag, MPI_COMM_WORLD, status);
-		down(semaphore_clock_id);
-		int *clock = (int *)shmat(clock_id, NULL, 0);
-	 *clock = max(*clock, data[size]) + 1;
-	 shmdt(clock);
-	 up(semaphore_clock_id);
-	 return ret;*/
 }
 
-void Send_To_All(int *buf, int size, int my_rank, int tag)
+void Send_To_All(int buf, int size, int my_rank, int tag)
 {
 	for (int i = 0; i < size; i++)
 	{
 		if (i != my_rank)
 		{
-			sendInt(buf, STRUCTURE_SIZE, i, tag);
+			printf("size %d\n", size);
+			//sendInt(buf, MESSAGE_SIZE, i, tag);
+			MPI_Send(&buf, MESSAGE_SIZE, MPI_INT, i, tag, MPI_COMM_WORLD);
 			printf("I sent to %d and my rank is %d\n", i, my_rank);
 		}
 	}
 }
-
-void Send_Trigger_To_Myself(int my_rank, int group_index)
-{
-	int group_index_answer_rank[STRUCTURE_SIZE];
-	group_index_answer_rank[0] = group_index;
-	group_index_answer_rank[1] = DOES_NOT_MATTER;
-	group_index_answer_rank[2] = my_rank;
-
-	sendInt(group_index_answer_rank, STRUCTURE_SIZE, my_rank, TRIGGER);
-	printf("Trigger sent, my rank is %d\n", my_rank);
-}
-
-void Send_To_All_Start_Drinking(int *all_mates, int size, int my_rank, int group_index)
-{
-	int group_index_answer_rank[STRUCTURE_SIZE];
-	group_index_answer_rank[0] = group_index;
-	group_index_answer_rank[1] = DOES_NOT_MATTER;
-	group_index_answer_rank[2] = my_rank;
-
-	for (int i = 0; i < size; i++)
-	{
-		int other_rank = all_mates[i];
-		if (other_rank != -1)
-		{
-			printf("INDEX %d\n", other_rank);
-			// MPI_Send(group_index_answer_rank, STRUCTURE_SIZE, MPI_INT, my_rank, START_DRINKING, MPI_COMM_WORLD);
-			sendInt(group_index_answer_rank, STRUCTURE_SIZE, other_rank, START_DRINKING);
-		}
-	}
-}
-
-void Send_To_All_My_Ranks(int *all_mates, int size, int my_rank, int group_index)
-{
-	//	int group_index_answer_rank[STRUCTURE_SIZE];
-	//	group_index_answer_rank[0] = group_index;
-	//	group_index_answer_rank[1] = DOES_NOT_MATTER;
-	//	group_index_answer_rank[2] = my_rank;
-
-	int *message = malloc(sizeof(int) * (size + 1));
-
-	for (int i = 0; i < size; i++)
-	{
-		message[i] = all_mates[i];
-	}
-	message[size] = group_index;
-
-	for (int i = 0; i < size; i++)
-	{
-		int other_rank = all_mates[i];
-		if (other_rank != -1)
-		{
-			//			sendInt(group_index_answer_rank, STRUCTURE_SIZE, other_rank, GATHER_RANKS);
-			sendInt(message, size + 1, other_rank, GATHER_RANKS);
-		}
-
-		// printf("I sent to %d and my rank is %d\n", i, my_rank);
-	}
-}
-
-void Send_I_Am_Not_In_Group(int size, int destination, int my_rank, int group_index)
-{
-	int *message = malloc((size + 1) * sizeof(int));
-	memset(message, -1, size * sizeof(int));
-	message[size] = I_AM_NOT_IN_GROUP;
-
-	//	int group_index_answer_rank[STRUCTURE_SIZE];
-	//       group_index_answer_rank[0] = group_index;
-	//      group_index_answer_rank[1] = I_AM_NOT_IN_GROUP;
-	//     group_index_answer_rank[2] = my_rank;
-
-	//	sendInt(group_index_answer_rank, STRUCTURE_SIZE, destination, GATHER_RANKS);
-	sendInt(message, size + 1, destination, GATHER_RANKS);
-}
-
-int* Leave_Only_Common_Ranks(int *original_mates, int *received_mates, int size)
-{
-	int control = 0;
-	int *common_mates;
-	common_mates = malloc(size * sizeof(int));
-	memset(common_mates, -1, size * sizeof(int));
-
-	for (int i = 0; i < size; i++)
-	{
-		for(int j = i + 1; j < size; j++)
-		{
-			if(original_mates[i] == received_mates[j])
-			{
-				control = 1;
-				break;
-			}
-		}
-
-		if(control == 1)
-		{
-			common_mates[i] = original_mates[i];
-			control = 0;
-		}
-	}
-	return common_mates;
-}
-
-void Add_Mate_To_Group(int mate_rank, int *all_mates, int size)
-{
-	for (int i = 0; i < size; i++)
-	{
-		if (all_mates[i] == -1)
-		{
-			all_mates[i] = mate_rank;
-			break;
-		}
-		else if (all_mates[i] == mate_rank)
-		{
-			break;
-		}
-	}
-}
-
 void Show_Mates(int *all_mates, int size, int my_rank)
 {
 	for (int i = 0; i < size; i++)
@@ -301,146 +176,225 @@ int Check_If_I_Can_Decide(int *all_mates, int size, int my_rank)
 
 int Get_My_Group_Index()
 {
-	int *my_group_index;
-
 	down(semaphore_my_group_index_id);
-	my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
-	int group_index = *my_group_index;
-	shmdt(my_group_index);
+	int group_index = my_group_index;
 	up(semaphore_my_group_index_id);
 
 	return group_index;
 }
 
-void *childThread()
+int Check_State_Of_Group_Indexes(int *group_indexes, int size)
 {
-	int *i_want_to_drink;
-	int *am_i_in_group;
-	int *all_mates;
+	int is_unique = YES;
+	int unique_count = 0;
 
-	printf("start losu losu\n");
-	down(semaphore_drink_id);
-	i_want_to_drink = (int *)shmat(i_want_to_drink_id, NULL, 0);
-	// perror("i want to drink error");
-
-	printf("%d\n", *i_want_to_drink);
-
-	while (*i_want_to_drink != YES)
+	for(int i = 0; i < size; i++)
 	{
-		*i_want_to_drink = rand() % range;
-		shmdt(i_want_to_drink);
-		up(semaphore_drink_id);
-		sleep(0.8);
-		down(semaphore_drink_id);
-		i_want_to_drink = (int *)shmat(i_want_to_drink_id, NULL, 0);
-		// printf("%d\n", *i_want_to_drink);
-		// perror("i want to drink error2");
-	}
-
-	shmdt(i_want_to_drink);
-	up(semaphore_drink_id);
-
-	printf("Chce pic! %d\n", rank);
-
-	printf("I send to all and wait for all and my rank is %d\n", rank);
-
-	int group_index = Get_My_Group_Index();
-
-	int group_index_answer_rank[STRUCTURE_SIZE];
-	group_index_answer_rank[0] = group_index;
-	group_index_answer_rank[1] = DOES_NOT_MATTER;
-	group_index_answer_rank[2] = rank;
-	Send_To_All(group_index_answer_rank, size, rank, WANT_TO_DRINK);
-
-	down(semaphore_am_i_in_group_id);
-	am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-
-	while (*am_i_in_group != YES)
-	{
-		shmdt(am_i_in_group);
-		up(semaphore_am_i_in_group_id);
-		sleep(0.8);
-		down(semaphore_am_i_in_group_id);
-		am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-	}
-
-	shmdt(am_i_in_group);
-	up(semaphore_am_i_in_group_id);
-
-
-	int start_drinking = NO;
-
-	if(rank == 0)
-	{
-		while (start_drinking != YES)
+		for(int j = 0; j < size; j++)
 		{
-			//              printf("I am here and my rank is %d\n", rank);
-			start_drinking = rand() % 100;
-			//              printf("START DRINKING = %d\n", start_drinking);
-			if (start_drinking == YES)
+			if(i != j && group_indexes[i] == group_indexes[j])
 			{
-				printf("I DECIDED and my rank is %d\n", rank);
-				int group_index = Get_My_Group_Index();
-				Send_Trigger_To_Myself(rank, group_index);
+				is_unique = NO;
 				break;
 			}
+		}
 
-			sleep(0.8);
+		if(is_unique == YES)
+		{
+			unique_count++;
+		}
+
+		if(unique_count == 2)
+		{
+			return TWO_OR_MORE_UNIQUES;
+		}
+
+		is_unique = YES;
+	}
+
+	if(unique_count == 0)
+	{
+		return NULL_UNIQUE;
+	}
+	else //unique_count == 1
+	{
+		return ONE_UNIQUE;
+	}
+}
+
+int *Get_Unique_Ranks(int *group_indexes, int size)
+{
+	int *unique_ranks = malloc(size * sizeof(int));
+	memset(unique_ranks, -1, size * sizeof(int));
+
+	int is_unique = YES;
+
+	int k = 0;
+
+	for(int i = 0; i < size; i++)
+	{
+		for(int j = 0; j < size; j++)
+		{
+			if(i != j && group_indexes[i] == group_indexes[j])
+			{
+				is_unique = NO;
+				break;
+			}
+		}
+
+		if(is_unique == YES)
+		{
+			unique_ranks[k] = i;
+			k++;
+		}
+
+		is_unique = YES;
+	}
+
+
+	return unique_ranks;
+}
+
+int Get_Minimum_Group_Index(int *group_indexes, int size, int my_group_id)
+{
+	int min_group_id = size + 10;
+
+	for(int i = 0; i < size; i++)
+	{
+		if( group_indexes[i] != my_group_id && group_indexes[i] < min_group_id)
+		{
+			min_group_id = group_indexes[i];
 		}
 	}
 
-/*
-	int i_can_decide;
+	return min_group_id;
+}
 
-	int start_drinking = NO;
+int *Remove_Me(int *unique_ranks, int size, int my_rank)
+{
+	int *my_mates = malloc(size * sizeof(int));
+	memset(my_mates, -1, size * sizeof(int));
 
-	down(semaphore_all_mates_id);
-                all_mates = (int *)shmat(all_mates_id, NULL, 0);
-	if(Get_Mates_Count(all_mates, size) == 1 || Check_If_I_Can_Decide(all_mates, size, rank) == YES)
+	int j = 0;
+	for(int i = 0; i < size; i++)
 	{
-		i_can_decide = YES;
-	}
-	else
-	{
-		i_can_decide = NO;
-
-	}
-	shmdt(all_mates);
-        up(semaphore_all_mates_id);
-
-	if( i_can_decide == YES)
-	{
-		while (start_drinking != YES)
-                {
-                                      printf("I am here and my rank is %d\n", rank);
-                        start_drinking = rand() % 100;
-                        //              printf("START DRINKING = %d\n", start_drinking);
-                        if (start_drinking == YES)
-                        {
-                                printf("I DECIDED and my rank is %d\n", rank);
-                                int group_index = Get_My_Group_Index();
-                                Send_Trigger_To_Myself(rank, group_index);
-                                break;
-                        }
-
-                        sleep(0.8);
-                }
-	}
-	*/
-	// perror("am_i_in_group_error\n");
-	/*	down(semaphore_all_mates_id);
-		all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-		int i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
-		printf("can_decide = %d and my rank is %d\n", i_can_decide, rank);
-
-		int start_drinking = NO;
-
-		while (i_can_decide == YES && start_drinking != YES)
+		if( unique_ranks[i] != my_rank && unique_ranks[i] != -1)
 		{
-	//		printf("I am here and my rank is %d\n", rank);
+			my_mates[j] = unique_ranks[i];
+			j++;
+		}
+	}
+
+	return my_mates;       
+}
+
+int *Look_For_Mates(int *group_indexes, int size, int my_rank, int my_group_id)
+{
+	int *my_mates = malloc(size * sizeof(int));
+	memset(my_mates, -1, size * sizeof(int));
+
+	int j = -1;
+
+	int *unique_ranks = Get_Unique_Ranks(group_indexes, size);
+
+	int state_of_group_indexes = Check_State_Of_Group_Indexes(group_indexes, size);
+
+	if(state_of_group_indexes == NULL_UNIQUE)
+	{
+		for(int mate_rank = 0; mate_rank < size; mate_rank++)
+		{
+			if(mate_rank != my_rank && group_indexes[mate_rank] == my_group_id)
+			{
+				j++;
+				my_mates[j] = mate_rank;
+			}
+		}
+	}
+	else if(state_of_group_indexes == ONE_UNIQUE)
+	{
+		j = -1;
+
+		if(unique_ranks[0] == my_rank)
+		{
+			int min_group_index = Get_Minimum_Group_Index(group_indexes, size, my_group_id);
+
+			for(int mate_rank = 0; mate_rank < size; mate_rank++)
+			{
+				if(mate_rank != my_rank && group_indexes[mate_rank] == min_group_index)
+				{
+					j++;
+					my_mates[j] = mate_rank;
+				}
+			}
+		}
+		else
+		{
+			for(int mate_rank = 0; mate_rank < size; mate_rank++)
+			{
+				if(mate_rank != my_rank && group_indexes[mate_rank] == my_group_id)
+				{
+					j++;
+					my_mates[j] = mate_rank;
+				}
+			}
+
+			if(Get_Minimum_Group_Index(group_indexes, size, group_indexes[unique_ranks[0]]) == my_group_id)
+			{
+				my_mates[j + 1] = unique_ranks[0];
+			}
+		}
+	}
+	else if(state_of_group_indexes == TWO_OR_MORE_UNIQUES)
+	{
+		for(int mate_rank = 0; mate_rank < size; mate_rank++)
+		{
+			if(mate_rank != my_rank && group_indexes[mate_rank] == my_group_id)
+			{
+				j++;
+				my_mates[j] = mate_rank;
+			}
+		}
+		if(my_mates[0] == -1)
+		{
+			my_mates = Remove_Me(unique_ranks, size, my_rank);
+		}
+	}
+
+	return my_mates;
+}
+
+void *childThread()
+{
+	printf("Start child! %d\n", rank);
+
+	printf("I send to all and wait for all and my rank is %d\n", rank);
+
+	Send_To_All(my_group_index, size, rank, GROUP_INDEX);
+
+
+	down(semaphore_am_i_in_group_id);
+
+	while (am_i_in_group != YES)
+	{
+		up(semaphore_am_i_in_group_id);
+		sleep(0.8);
+		down(semaphore_am_i_in_group_id);
+	}
+
+	up(semaphore_am_i_in_group_id);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	printf("BARRIER my rank is %d\n", rank);
+	/*int start_drinking = NO;
+
+	  if(rank == 0)
+	  {
+	  while (start_drinking != YES)
+	  {
+	//              printf("I am here and my rank is %d\n", rank);
 	start_drinking = rand() % 100;
-	//		printf("START DRINKING = %d\n", start_drinking);
+	//              printf("START DRINKING = %d\n", start_drinking);
 	if (start_drinking == YES)
 	{
 	printf("I DECIDED and my rank is %d\n", rank);
@@ -449,28 +403,22 @@ void *childThread()
 	break;
 	}
 
-	shmdt(all_mates);
-	up(semaphore_all_mates_id);
 	sleep(0.8);
-
-	down(semaphore_all_mates_id);
-	all_mates = (int *)shmat(all_mates_id, NULL, 0);
-	i_can_decide = Check_If_I_Can_Decide(all_mates, size, rank);
+	}
 	}
 
-	shmdt(all_mates);
-	up(semaphore_all_mates_id);
-	*/
 
 	if (start_drinking == YES)
 	{
-		printf("Start drinking\n");
+	printf("Start drinking\n");
 	}
 	else
 	{
-		printf("Waiting for decision and my rank is %d\n", rank);
+	printf("Waiting for decision and my rank is %d\n", rank);
 	}
-	// Send_To_All(&rank, 1, rank, ARBITER_REQUEST);
+	*/ // Send_To_All(&rank, 1, rank, ARBITER_REQUEST);
+
+	printf("waiting and my rank is %d\n", rank);
 	while (1)
 		;
 	return NULL;
@@ -488,335 +436,73 @@ int main(int argc, char **argv)
 	semaphore_my_group_index_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_my_group_index_id, 0, SETVAL, (int)1);
 
-	int *my_group_index;
-	my_group_index_id = shmget(IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT);
-	my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
-	*my_group_index = 1;
-	shmdt(my_group_index);
-
-	clock_id = shmget(IPC_PRIVATE, sizeof(int), 0666 | IPC_CREAT);
-
 	semaphore_clock_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_clock_id, 0, SETVAL, (int)1);
 
-	int *clock;
-
-	clock = (int *)shmat(clock_id, NULL, 0);
-	*clock = 0;
-	shmdt(clock);
-
-	i_want_to_drink_id = shmget(IPC_PRIVATE, sizeof(int), 0777 | IPC_CREAT);
-	// perror("i_want_to_drink_id error");
-	// printf("%d\n", i_want_to_drink_id);
-
-	semaphore_drink_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
-	semctl(semaphore_drink_id, 0, SETVAL, (int)1);
-
-	int *i_want_to_drink;
-	i_want_to_drink_id = shmget(IPC_PRIVATE, sizeof(int), 0777 | IPC_CREAT);
-	i_want_to_drink = (int *)shmat(i_want_to_drink_id, NULL, 0);
-	*i_want_to_drink = NO;
-	shmdt(i_want_to_drink);
-
 	semaphore_am_i_in_group_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_am_i_in_group_id, 0, SETVAL, (int)1);
-
-	int *am_i_in_group;
-	am_i_in_group_id = shmget(IPC_PRIVATE, sizeof(int), 0777 | IPC_CREAT);
-	am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-	*am_i_in_group = NO;
-	shmdt(am_i_in_group);
 
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	semaphore_all_mates_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
-	semctl(semaphore_all_mates_id, 0, SETVAL, (int)1);
-
-	int *all_mates;
-	all_mates_id = shmget(IPC_PRIVATE, size * sizeof(int), 0777 | IPC_CREAT);
-	all_mates = (int *)shmat(all_mates_id, NULL, 0);
-	memset(all_mates, -1, sizeof(int) * size);
-	shmdt(all_mates);
-
 	srand(time(0));
 
-	MPI_Barrier(MPI_COMM_WORLD); //pozostalosc po testach, mysle ze mozna to usunac, ale zobaczymy
+	my_group_index = rand()%size;
 
+	printf("My group index is %d and my rank is %d\n", my_group_index, rank);
+	am_i_in_group = NO;
+	//	*lamport_clock = 0;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	pthread_t thread;
 	pthread_create(&thread, NULL, childThread, NULL);
-	int group_index_answer_rank[STRUCTURE_SIZE], answer_count = 0, answer_count_gather = 0;
-	int invalid = FALSE;
-	int start_drinking = NO;
-	int *all_mates_temp;
-	int mates_count = -1;
-	int message_size;
-	int *message = malloc(sizeof(int) * (size + 2));
 
-	all_mates_temp = malloc((size + 1) * sizeof(int));
-	memset(all_mates_temp, -1, sizeof(int) * (size + 1)); // moz niepotrzebne
+	int message = -1;
+
+	int answer_count = 1;
+	int *all_group_indexes = malloc(size * sizeof(int));
+	memset(all_group_indexes, -1, size * sizeof(int));;
+
+	all_group_indexes[rank] = my_group_index;
 
 	while (1)
 	{
-		MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		MPI_Get_count(&status, MPI_INT, &message_size);
+		//		MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		//	MPI_Get_count(&status, MPI_INT, &message_size);
 
-		recvInt(message, message_size, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
+		//		recvInt(message, MESSAGE_SIZE + 1, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-		if(status.MPI_TAG != GATHER_RANKS)
+		MPI_Recv(&message, MESSAGE_SIZE, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
+		if(status.MPI_TAG == GROUP_INDEX)
 		{
-			for(int i = 0; i < STRUCTURE_SIZE; i++)
-			{
-				group_index_answer_rank[i] = message[i];
-			}
-		}
-		else
-		{
-			for(int i = 0; i < size + 1; i++)
-			{
-				all_mates_temp[i] = message[i];
-			}
-			//			printf("all_mates_temp = %d\n", all_mates_temp[size]);
-		}
+			all_group_indexes[status.MPI_SOURCE] = message;
 
-		printf("I received tag %d from %d and my rank is %d\n", status.MPI_TAG, status.MPI_SOURCE, rank);
-
-		if (status.MPI_TAG == WANT_TO_DRINK)
-		{
-			down(semaphore_drink_id);
-			i_want_to_drink = (int *)shmat(i_want_to_drink_id, NULL, 0);
-
-			down(semaphore_my_group_index_id);
-			my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
-
-			if (*i_want_to_drink == YES)
-			{
-				shmdt(i_want_to_drink);
-				up(semaphore_drink_id);
-
-				group_index_answer_rank[0] = *my_group_index;
-				group_index_answer_rank[2] = rank;
-
-				if (start_drinking == NO)
-				{
-					if (group_index_answer_rank[0] == *my_group_index)
-					{
-						down(semaphore_am_i_in_group_id);
-						am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-
-						down(semaphore_all_mates_id);
-						all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-						Add_Mate_To_Group(status.MPI_SOURCE, all_mates, size);
-						//	Show_Mates(all_mates, size, rank);
-
-						shmdt(all_mates);
-						up(semaphore_all_mates_id);
-
-						shmdt(am_i_in_group);
-						up(semaphore_am_i_in_group_id);
-
-						group_index_answer_rank[1] = YES;
-						printf("I answer YES to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-						sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
-					}
-					else
-					{
-						group_index_answer_rank[1] = NOT_EQUAL_INDEX;
-						printf("I answer NO2 to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-						sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
-					}
-				}
-				else
-				{
-					group_index_answer_rank[1] = WE_BEGIN_DRINK;
-					printf("I answer NO3 to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-					sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
-				}
-			}
-			else
-			{
-				shmdt(i_want_to_drink);
-				up(semaphore_drink_id);
-
-				if (*my_group_index < group_index_answer_rank[0])
-				{
-					*my_group_index = group_index_answer_rank[0];
-				}
-				group_index_answer_rank[0] = *my_group_index;
-				group_index_answer_rank[1] = NO_DRINK;
-				group_index_answer_rank[2] = rank;
-				printf("I answer NO to  %d and my rank is %d\n", status.MPI_SOURCE, rank);
-				sendInt(group_index_answer_rank, STRUCTURE_SIZE, status.MPI_SOURCE, ANSWER);
-			}
-			shmdt(my_group_index);
-			up(semaphore_my_group_index_id);
-		}
-		else if (status.MPI_TAG == ANSWER)
-		{
-			down(semaphore_my_group_index_id);
-			my_group_index = (int *)shmat(my_group_index_id, NULL, 0);
-
-			down(semaphore_all_mates_id);
-			all_mates = (int *)shmat(all_mates_id, NULL, 0);
 			answer_count++;
 
-			if (group_index_answer_rank[1] == YES && invalid == FALSE)
+			if(answer_count == size)
 			{
-				Add_Mate_To_Group(status.MPI_SOURCE, all_mates, size);
+				my_group = Look_For_Mates(all_group_indexes, size, rank, my_group_index);
+
+				Show_Mates(my_group, size, rank);
+
+				down(semaphore_am_i_in_group_id);
+				am_i_in_group = YES;
+				up(semaphore_am_i_in_group_id);
 			}
-			else if (group_index_answer_rank[1] != YES && invalid == FALSE)
-			{
-				if (group_index_answer_rank[1] == NOT_EQUAL_INDEX)
-				{
-					if (*my_group_index < group_index_answer_rank[0])
-						*my_group_index = group_index_answer_rank[0];
-					invalid = TRUE;
-					memset(all_mates, -1, sizeof(int) * size);
-				}
-				else if (group_index_answer_rank[1] == WE_BEGIN_DRINK)
-				{
-					*my_group_index = group_index_answer_rank[0] + 1;
-					invalid = TRUE;
-					memset(all_mates, -1, sizeof(int) * size);
-				}
-			}
-
-			if (answer_count == size - 1)
-			{
-				if (invalid == FALSE)
-				{
-					printf("All answers came:\n");
-					//			Show_Mates(all_mates, size, rank);
-
-					down(semaphore_am_i_in_group_id);
-					am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-					*am_i_in_group = YES;
-					shmdt(am_i_in_group);
-					up(semaphore_am_i_in_group_id);
-				}
-				answer_count = 0;
-				invalid = FALSE;
-			}
-
-			shmdt(my_group_index);
-			up(semaphore_my_group_index_id);
-			shmdt(all_mates);
-			up(semaphore_all_mates_id);
-		}
-		else if (status.MPI_TAG == TRIGGER)
-		{
-			start_drinking = YES;
-
-			down(semaphore_all_mates_id);
-			all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-			int group_index = Get_My_Group_Index();
-
-			mates_count = Get_Mates_Count(all_mates, size);
-
-			Send_To_All_Start_Drinking(all_mates, size, rank, group_index);
-			Send_To_All_My_Ranks(all_mates, size, rank, group_index);
-
-			shmdt(all_mates);
-			up(semaphore_all_mates_id);
-		}
-		else if (status.MPI_TAG == START_DRINKING)
-		{
-			down(semaphore_am_i_in_group_id);
-			am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-			int group_index = Get_My_Group_Index(); 
-
-			if(*am_i_in_group == YES && group_index_answer_rank[0] == group_index)//zmienic
-			{
-				start_drinking = YES;
-
-				down(semaphore_all_mates_id);
-				all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-				mates_count = Get_Mates_Count(all_mates, size);
-
-				//printf("I send to all my ranks and my rank is %d\n", rank);
-				Send_To_All_My_Ranks(all_mates, size, rank, group_index);
-
-				shmdt(all_mates);
-				up(semaphore_all_mates_id);
-			}
-			else
-			{
-				printf("My group index is %d and my rank is %d\n", group_index_answer_rank[0], rank);
-				printf("I_AM_NOT_IN_GROUP and my rank is %d\n", rank);
-				Send_I_Am_Not_In_Group(size, status.MPI_SOURCE, rank, group_index);
-			}
-			/*
-			   down(semaphore_all_mates_id);
-			   all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-			   Show_Mates(all_mates, size, rank);
-
-			   shmdt(all_mates);
-			   up(semaphore_all_mates_id);
-			   */
-			shmdt(am_i_in_group);
-			up(semaphore_am_i_in_group_id);
-		}
-
-		else if (status.MPI_TAG == GATHER_RANKS)
-		{
-			down(semaphore_am_i_in_group_id);
-			am_i_in_group = (int *)shmat(am_i_in_group_id, NULL, 0);
-			int group_index = Get_My_Group_Index();
-
-			if(*am_i_in_group == YES && all_mates_temp[size] == group_index)
-			{
-				down(semaphore_all_mates_id);
-				all_mates = (int *)shmat(all_mates_id, NULL, 0);
-
-				if(mates_count == -1)
-				{
-					mates_count = Get_Mates_Count(all_mates, size);
-				}
-
-				start_drinking = YES;
-				answer_count_gather++;
-
-				printf("Merging DUPA my rank is %d\n", rank);
-
-				if(all_mates_temp[size] != I_AM_NOT_IN_GROUP)
-				{
-					all_mates = Leave_Only_Common_Ranks(all_mates, all_mates_temp, size);
-				}
-
-				if(answer_count_gather == mates_count)
-				{
-					Show_Mates(all_mates, size, rank);
-
-					printf("DRINKING\n");
-				}
-
-				shmdt(all_mates);
-				up(semaphore_all_mates_id);
-			}
-
-			shmdt(am_i_in_group);
-			up(semaphore_am_i_in_group_id);
 		}
 	}
-	printf("I remove shm and semaphores\n");
+
+	printf("I remove semaphores\n");
 	pthread_join(thread, NULL);
-	semctl(semaphore_drink_id, 0, IPC_RMID);
-	shmctl(i_want_to_drink_id, IPC_RMID, NULL);
 
 	semctl(semaphore_am_i_in_group_id, 0, IPC_RMID);
 	shmctl(am_i_in_group_id, IPC_RMID, NULL);
 
 	semctl(semaphore_my_group_index_id, 0, IPC_RMID);
 	shmctl(my_group_index_id, IPC_RMID, NULL);
-
-	semctl(semaphore_all_mates_id, 0, IPC_RMID);
-	shmctl(all_mates_id, IPC_RMID, NULL);
 
 	semctl(semaphore_clock_id, 0, IPC_RMID);
 	shmctl(clock_id, IPC_RMID, NULL);
