@@ -54,18 +54,14 @@ int semaphore_my_group_index_id;
 int am_i_in_group_id;
 int semaphore_am_i_in_group_id;
 
-int all_mates_id;
-int semaphore_all_mates_id;
-
 int clock_id;
 int semaphore_clock_id;
 
 int my_group_index, am_i_in_group;
 int *lamport_clock;
+int *my_group;
 
 int size, rank, range;
-
-int *my_group;
 
 void up(int semid)
 {
@@ -96,7 +92,9 @@ int sendInt(int *data, int size, int destination, int tag)
 	//	printf("clock = %d\n", *clock);
 	memcpy(buf + size, lamport_clock, sizeof(int));
 	up(semaphore_clock_id);
-	return MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
+	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
+	free(buf);
+	return ret;
 }
 
 int recvInt(int *data, int size, int source, int tag, MPI_Status *status)
@@ -120,20 +118,21 @@ void Send_To_All(int buf, int size, int my_rank, int tag)
 	{
 		if (i != my_rank)
 		{
-			printf("size %d\n", size);
 			//sendInt(buf, MESSAGE_SIZE, i, tag);
 			MPI_Send(&buf, MESSAGE_SIZE, MPI_INT, i, tag, MPI_COMM_WORLD);
 			printf("I sent to %d and my rank is %d\n", i, my_rank);
 		}
 	}
 }
-void Show_Mates(int *all_mates, int size, int my_rank)
+void Show_Mates(int *my_mates)
 {
+	int my_rank = rank;
+
 	for (int i = 0; i < size; i++)
 	{
-		if (all_mates[i] != -1)
+		if (my_mates[i] != -1)
 		{
-			printf("My rank is %d, i am with mate %d\n", my_rank, all_mates[i]);
+			printf("My rank is %d, i am with mate %d\n", my_rank, my_mates[i]);
 		}
 	}
 }
@@ -152,38 +151,7 @@ int Get_Mates_Count(int *all_mates, int size)
 	return count;
 }
 
-int Check_If_I_Can_Decide(int *all_mates, int size, int my_rank)
-{
-	int min = all_mates[0];
-	for (int i = 1; i < size; i++)
-	{
-		if (all_mates[i] == -1)
-		{
-			break;
-		}
-		if (all_mates[i] < min)
-		{
-			min = all_mates[i];
-		}
-	}
-
-	if (min > my_rank)
-	{
-		return YES;
-	}
-	return NO;
-}
-
-int Get_My_Group_Index()
-{
-	down(semaphore_my_group_index_id);
-	int group_index = my_group_index;
-	up(semaphore_my_group_index_id);
-
-	return group_index;
-}
-
-int Check_State_Of_Group_Indexes(int *group_indexes, int size)
+int Check_State_Of_Group_Indexes(int *group_indexes)
 {
 	int is_unique = YES;
 	int unique_count = 0;
@@ -222,7 +190,7 @@ int Check_State_Of_Group_Indexes(int *group_indexes, int size)
 	}
 }
 
-int *Get_Unique_Ranks(int *group_indexes, int size)
+int *Get_Unique_Ranks(int *group_indexes)
 {
 	int *unique_ranks = malloc(size * sizeof(int));
 	memset(unique_ranks, -1, size * sizeof(int));
@@ -251,11 +219,10 @@ int *Get_Unique_Ranks(int *group_indexes, int size)
 		is_unique = YES;
 	}
 
-
 	return unique_ranks;
 }
 
-int Get_Minimum_Group_Index(int *group_indexes, int size, int my_group_id)
+int Get_Minimum_Group_Index(int *group_indexes, int my_group_id)
 {
 	int min_group_id = size + 10;
 
@@ -270,12 +237,14 @@ int Get_Minimum_Group_Index(int *group_indexes, int size, int my_group_id)
 	return min_group_id;
 }
 
-int *Remove_Me(int *unique_ranks, int size, int my_rank)
+int *Remove_Me(int *unique_ranks)
 {
 	int *my_mates = malloc(size * sizeof(int));
 	memset(my_mates, -1, size * sizeof(int));
 
+	int my_rank = rank;
 	int j = 0;
+
 	for(int i = 0; i < size; i++)
 	{
 		if( unique_ranks[i] != my_rank && unique_ranks[i] != -1)
@@ -285,19 +254,23 @@ int *Remove_Me(int *unique_ranks, int size, int my_rank)
 		}
 	}
 
+//	free(my_mates);
+
 	return my_mates;       
 }
 
-int *Look_For_Mates(int *group_indexes, int size, int my_rank, int my_group_id)
+int *Look_For_Mates(int *group_indexes, int my_group_id)
 {
 	int *my_mates = malloc(size * sizeof(int));
 	memset(my_mates, -1, size * sizeof(int));
 
+	int my_rank = rank;
+
 	int j = -1;
 
-	int *unique_ranks = Get_Unique_Ranks(group_indexes, size);
+	int *unique_ranks = Get_Unique_Ranks(group_indexes);
 
-	int state_of_group_indexes = Check_State_Of_Group_Indexes(group_indexes, size);
+	int state_of_group_indexes = Check_State_Of_Group_Indexes(group_indexes);
 
 	if(state_of_group_indexes == NULL_UNIQUE)
 	{
@@ -316,7 +289,7 @@ int *Look_For_Mates(int *group_indexes, int size, int my_rank, int my_group_id)
 
 		if(unique_ranks[0] == my_rank)
 		{
-			int min_group_index = Get_Minimum_Group_Index(group_indexes, size, my_group_id);
+			int min_group_index = Get_Minimum_Group_Index(group_indexes, my_group_id);
 
 			for(int mate_rank = 0; mate_rank < size; mate_rank++)
 			{
@@ -338,7 +311,7 @@ int *Look_For_Mates(int *group_indexes, int size, int my_rank, int my_group_id)
 				}
 			}
 
-			if(Get_Minimum_Group_Index(group_indexes, size, group_indexes[unique_ranks[0]]) == my_group_id)
+			if(Get_Minimum_Group_Index(group_indexes, group_indexes[unique_ranks[0]]) == my_group_id)
 			{
 				my_mates[j + 1] = unique_ranks[0];
 			}
@@ -356,11 +329,35 @@ int *Look_For_Mates(int *group_indexes, int size, int my_rank, int my_group_id)
 		}
 		if(my_mates[0] == -1)
 		{
-			my_mates = Remove_Me(unique_ranks, size, my_rank);
+			my_mates = Remove_Me(unique_ranks);
 		}
 	}
 
+	//free(unique_ranks);
+
 	return my_mates;
+}
+
+int Check_If_Am_I_Master()
+{
+	int min = my_group[0];
+	for(int i = 1; i < size; i++)
+	{
+		if(my_group[i] == -1)
+		{
+			break;
+		}
+		if(my_group[i] < min)
+		{
+			min = my_group[i];
+		}
+	}
+
+	if(min > rank)
+	{
+		return YES;
+	}
+	return NO;
 }
 
 void *childThread()
@@ -369,7 +366,11 @@ void *childThread()
 
 	printf("I send to all and wait for all and my rank is %d\n", rank);
 
-	Send_To_All(my_group_index, size, rank, GROUP_INDEX);
+	down(semaphore_my_group_index_id);
+	int group_index = my_group_index;
+	up(semaphore_my_group_index_id);
+
+	Send_To_All(group_index, size, rank, GROUP_INDEX);
 
 
 	down(semaphore_am_i_in_group_id);
@@ -383,42 +384,17 @@ void *childThread()
 
 	up(semaphore_am_i_in_group_id);
 
+	int am_i_master = Check_If_Am_I_Master();
+
+	// ten if byc moze powinien byc po barierr, Ty musisz zadecydowac
+	if(am_i_master == YES)
+	{
+		//arbiter
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	printf("BARRIER my rank is %d\n", rank);
-	/*int start_drinking = NO;
-
-	  if(rank == 0)
-	  {
-	  while (start_drinking != YES)
-	  {
-	//              printf("I am here and my rank is %d\n", rank);
-	start_drinking = rand() % 100;
-	//              printf("START DRINKING = %d\n", start_drinking);
-	if (start_drinking == YES)
-	{
-	printf("I DECIDED and my rank is %d\n", rank);
-	int group_index = Get_My_Group_Index();
-	Send_Trigger_To_Myself(rank, group_index);
-	break;
-	}
-
-	sleep(0.8);
-	}
-	}
-
-
-	if (start_drinking == YES)
-	{
-	printf("Start drinking\n");
-	}
-	else
-	{
-	printf("Waiting for decision and my rank is %d\n", rank);
-	}
-	*/ // Send_To_All(&rank, 1, rank, ARBITER_REQUEST);
-
-	printf("waiting and my rank is %d\n", rank);
 	while (1)
 		;
 	return NULL;
@@ -465,7 +441,9 @@ int main(int argc, char **argv)
 	int *all_group_indexes = malloc(size * sizeof(int));
 	memset(all_group_indexes, -1, size * sizeof(int));;
 
+	down(semaphore_my_group_index_id);
 	all_group_indexes[rank] = my_group_index;
+	up(semaphore_my_group_index_id);
 
 	while (1)
 	{
@@ -484,13 +462,15 @@ int main(int argc, char **argv)
 
 			if(answer_count == size)
 			{
-				my_group = Look_For_Mates(all_group_indexes, size, rank, my_group_index);
+				my_group = Look_For_Mates(all_group_indexes, all_group_indexes[rank]);
 
-				Show_Mates(my_group, size, rank);
+				Show_Mates(my_group);
 
 				down(semaphore_am_i_in_group_id);
 				am_i_in_group = YES;
 				up(semaphore_am_i_in_group_id);
+
+				//free(all_group_indexes);
 			}
 		}
 	}
@@ -507,6 +487,7 @@ int main(int argc, char **argv)
 	semctl(semaphore_clock_id, 0, IPC_RMID);
 	shmctl(clock_id, IPC_RMID, NULL);
 
+//	free(my_group);
 	printf("MPI finallize\n");
 	MPI_Finalize();
 	return 0;
