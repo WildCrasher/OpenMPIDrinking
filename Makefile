@@ -12,4 +12,4 @@ run: compile
 clear:
 	rm ./chlanie3
 runwithdebugger: compile
-	mpirun -np 4 xterm -e gdb -ex run --args ./chlanie3
+	mpirun -np 3 xterm -e gdb -ex run --args ./chlanie3

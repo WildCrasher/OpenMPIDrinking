@@ -45,7 +45,10 @@ typedef struct ArbiterRequest
 } ArbiterRequest;
 
 int *lamport_clock;
+int timestamp;
 int semaphore_clock_id;
+
+int wants_to_enter;
 
 int size, rank, range;
 
@@ -132,7 +135,7 @@ void *childThread()
 	down(semaphore_clock_id);
 	int message = *lamport_clock;
 	up(semaphore_clock_id);
-	Send_To_All(&message, size, rank, ARBITER_REQUEST);
+	Send_To_All(&timestamp, size, rank, ARBITER_REQUEST);
 
 	while (1)
 		;
@@ -148,6 +151,8 @@ int main(int argc, char **argv)
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	printf("My rank = %d\n", rank);
+	timestamp = rank;
 
 	semaphore_clock_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_clock_id, 0, SETVAL, (int)1);
@@ -160,6 +165,8 @@ int main(int argc, char **argv)
 	ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
 
 	srand(time(0));
+
+	wants_to_enter = 1;
 
 	MPI_Barrier(MPI_COMM_WORLD); //pozostalosc po testach, mysle ze mozna to usunac, ale zobaczymy
 
@@ -180,15 +187,16 @@ int main(int argc, char **argv)
 		if (status.MPI_TAG == ARBITER_REQUEST)
 		{
 			// printf("request\n");
-			int local_clock;
-			down(semaphore_clock_id);
-			local_clock = *lamport_clock;
-			up(semaphore_clock_id);
-			// printf("local_clock=%d message=%d\n",local_clock, message);
-			if (local_clock > message)
+			printf("timestamp=%d message=%d\n",timestamp, message);
+			if (!wants_to_enter || timestamp > message)
 			{
 				printf("send answer to %d\n", status.MPI_SOURCE);
-				sendInt(&local_clock, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+			}
+			else if(timestamp == message && rank < status.MPI_SOURCE)
+			{
+				printf("send answer2 to %d\n", status.MPI_SOURCE);
+				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
 			}
 			else
 			{
@@ -208,7 +216,7 @@ int main(int argc, char **argv)
 				sleep(5);
 				arbiter_answer_count = 0;
 				ArbiterRequest request;
-				// printf("first = %d, last = %d\n",queryIndexFirst, queryIndexLast);
+				printf("first = %d, last = %d\n",queryIndexFirst, queryIndexLast);
 				for(int i=queryIndexFirst; i<queryIndexLast; i++)
 				{
 					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
