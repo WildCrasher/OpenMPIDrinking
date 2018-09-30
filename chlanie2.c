@@ -23,9 +23,9 @@
 //tags
 #define GROUP_INDEX (int)1
 #define ANSWER (int)2
-#define ARBITER_REQUEST (int)4
-#define START_DRINKING (int)5
-#define ARBITER_ANSWER (int)6
+#define ARBITER_REQUEST (int)3
+#define START_DRINKING (int)4
+#define ARBITER_ANSWER (int)5
 
 //answers
 #define NO (int)0
@@ -432,12 +432,16 @@ void *childThread()
 		Send_To_All(timestamp, size, rank, ARBITER_REQUEST);
 	}
 
-	while (am_i_in_group != YES)
+	down(semaphore_start_drinking_id);
+
+	while (start_drinking != YES)
 	{
-		up(semaphore_am_i_in_group_id);
+		up(semaphore_start_drinking_id);
 		sleep(0.8);
-		down(semaphore_am_i_in_group_id);
+		down(semaphore_start_drinking_id);
 	}
+
+	up(semaphore_start_drinking_id);
 
 	printf("Start drinking and my group index is %d and my rank is%d\n", my_group_index, rank);
 
@@ -466,136 +470,153 @@ int main(int argc, char **argv)
 	semctl(semaphore_am_i_in_group_id, 0, SETVAL, (int)1);
 
 	semaphore_start_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
-        semctl(semaphore_start_drinking_id, 0, SETVAL, (int)1);
+	semctl(semaphore_start_drinking_id, 0, SETVAL, (int)1);
 
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	srand(time(0) + rank);
-	my_group_index = rand() % size;
-
-	printf("My group index is %d and my rank is %d\n", my_group_index, rank);
-
-	am_i_in_group = NO;
-	lamport_clock = malloc(sizeof(int));
-	*lamport_clock = 0;
-	am_i_master = NO;
-	start_drinking = NO;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	pthread_t thread;
-	pthread_create(&thread, NULL, childThread, NULL);
-
-	int message = -1;
-
-	int answer_count = 1;
-	int *all_group_indexes = malloc(size * sizeof(int));
-	memset(all_group_indexes, -1, size * sizeof(int));
-
-	down(semaphore_my_group_index_id);
-	all_group_indexes[rank] = my_group_index;
-	up(semaphore_my_group_index_id);
-
-	int queryIndexLast = 0;
-	int queryIndexFirst = 0;
-	ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
-	int arbiter_answer_count = 0;
-
-	while (1)
+	if(size < 2)
 	{
-		recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
+		printf("Create more competitors\n");
 
-		if (status.MPI_TAG == GROUP_INDEX)
+		semctl(semaphore_am_i_in_group_id, 0, IPC_RMID);
+		semctl(semaphore_my_group_index_id, 0, IPC_RMID);
+		semctl(semaphore_clock_id, 0, IPC_RMID);
+		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
+
+		MPI_Finalize();
+		return 0;
+	}
+	else
+	{
+		srand(time(0) + rank);
+		my_group_index = rand() % size;
+
+		printf("My group index is %d and my rank is %d\n", my_group_index, rank);
+
+		am_i_in_group = NO;
+		lamport_clock = malloc(sizeof(int));
+		*lamport_clock = 0;
+		am_i_master = NO;
+		start_drinking = NO;
+
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		pthread_t thread;
+		pthread_create(&thread, NULL, childThread, NULL);
+
+		int message = -1;
+
+		int answer_count = 1;
+		int *all_group_indexes = malloc(size * sizeof(int));
+		memset(all_group_indexes, -1, size * sizeof(int));
+
+		down(semaphore_my_group_index_id);
+		all_group_indexes[rank] = my_group_index;
+		up(semaphore_my_group_index_id);
+
+		int queryIndexLast = 0;
+		int queryIndexFirst = 0;
+		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
+		int arbiter_answer_count = 0;
+
+
+
+		while (1)
 		{
-			all_group_indexes[status.MPI_SOURCE] = message;
+			recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-			answer_count++;
-
-			if (answer_count == size)
+			if (status.MPI_TAG == GROUP_INDEX)
 			{
-				my_group = Look_For_Mates(all_group_indexes, all_group_indexes[rank]);
+				all_group_indexes[status.MPI_SOURCE] = message;
 
-				Show_Mates(my_group);
+				answer_count++;
 
-				down(semaphore_am_i_in_group_id);
-				am_i_in_group = YES;
-				up(semaphore_am_i_in_group_id);
+				if (answer_count == size)
+				{
+					my_group = Look_For_Mates(all_group_indexes, all_group_indexes[rank]);
 
-				//free(all_group_indexes);
+					Show_Mates(my_group);
+
+					down(semaphore_am_i_in_group_id);
+					am_i_in_group = YES;
+					up(semaphore_am_i_in_group_id);
+
+					//free(all_group_indexes);
+				}
 			}
-		}
-		else if (status.MPI_TAG == ARBITER_REQUEST)
-		{
-			// down(semaphore_clock_id);
-			// timestamp = *lamport_clock;
-			// up(semaphore_clock_id);
-			// printf("request\n");
-			printf("timestamp=%d message=%d\n", timestamp, message);
-			if (!am_i_master || timestamp > message)
+			else if (status.MPI_TAG == ARBITER_REQUEST)
 			{
-				printf("send arbiter answer to %d\n", status.MPI_SOURCE);
-				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+				// down(semaphore_clock_id);
+				// timestamp = *lamport_clock;
+				// up(semaphore_clock_id);
+				// printf("request\n");
+				printf("timestamp=%d message=%d\n", timestamp, message);
+				if (!am_i_master || timestamp > message)
+				{
+					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+					sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+				}
+				else if (timestamp == message && rank < status.MPI_SOURCE)
+				{
+					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+					sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+				}
+				else
+				{
+					ArbiterRequest request;
+					request.timestamp = message;
+					request.rank = status.MPI_SOURCE;
+					Append_To_Query(request, requestsQuery, &queryIndexFirst, &queryIndexLast);
+				}
 			}
-			else if (timestamp == message && rank < status.MPI_SOURCE)
+			else if (status.MPI_TAG == ARBITER_ANSWER)
 			{
-				printf("send arbiter answer to %d\n", status.MPI_SOURCE);
-				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
+				arbiter_answer_count++;
+				// printf("answer\n");
+				if (am_i_master && arbiter_answer_count >= size - ARBITER_SIZE)
+				{
+					down(semaphore_start_drinking_id);
+					start_drinking = YES;
+					up(semaphore_start_drinking_id);
+
+					Send_Start_Drinking();
+
+					printf("Start to drink\n");
+					sleep(5);
+					arbiter_answer_count = 0;
+					am_i_master = NO;
+					ArbiterRequest request;
+					printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
+					for (int i = queryIndexFirst; i < queryIndexLast; i++)
+					{
+						request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
+						sendInt(&rank, 1, request.rank, ARBITER_ANSWER);
+					}
+				}
 			}
-			else
-			{
-				ArbiterRequest request;
-				request.timestamp = message;
-				request.rank = status.MPI_SOURCE;
-				Append_To_Query(request, requestsQuery, &queryIndexFirst, &queryIndexLast);
-			}
-		}
-		else if (status.MPI_TAG == ARBITER_ANSWER)
-		{
-			arbiter_answer_count++;
-			// printf("answer\n");
-			if (arbiter_answer_count >= size - ARBITER_SIZE)
+			else if(status.MPI_TAG == START_DRINKING)
 			{
 				down(semaphore_start_drinking_id);
 				start_drinking = YES;
 				up(semaphore_start_drinking_id);
-
-				Send_Start_Drinking();
-
-				printf("Start to drink\n");
-				sleep(5);
-				arbiter_answer_count = 0;
-				am_i_master = NO;
-				ArbiterRequest request;
-				printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
-				for (int i = queryIndexFirst; i < queryIndexLast; i++)
-				{
-					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
-					sendInt(&rank, 1, request.rank, ARBITER_ANSWER);
-				}
 			}
 		}
-		else if(status.MPI_TAG == START_DRINKING)
-		{
-			down(semaphore_start_drinking_id);
-			start_drinking = YES;
-			up(semaphore_start_drinking_id);
-		}
+
+		printf("I remove semaphores\n");
+		pthread_join(thread, NULL);
+
+		semctl(semaphore_am_i_in_group_id, 0, IPC_RMID);
+
+		semctl(semaphore_my_group_index_id, 0, IPC_RMID);
+
+		semctl(semaphore_clock_id, 0, IPC_RMID);
+
+		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
+		//	free(my_group);
+		printf("MPI finallize\n");
+		MPI_Finalize();
+		return 0;
 	}
-
-	printf("I remove semaphores\n");
-	pthread_join(thread, NULL);
-
-	semctl(semaphore_am_i_in_group_id, 0, IPC_RMID);
-
-	semctl(semaphore_my_group_index_id, 0, IPC_RMID);
-
-	semctl(semaphore_clock_id, 0, IPC_RMID);
-
-	semctl(semaphore_start_drinking_id, 0, IPC_RMID);
-	//	free(my_group);
-	printf("MPI finallize\n");
-	MPI_Finalize();
-	return 0;
 }
