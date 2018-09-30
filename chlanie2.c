@@ -415,15 +415,16 @@ void *childThread()
 
 	am_i_master = Check_If_Am_I_Master();
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	printf("BARRIER my rank is %d\n", rank);
 	down(semaphore_clock_id);
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
-
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("BARRIER my rank is %d\n", rank);
+	
 	// ten if byc moze powinien byc po barierr, Ty musisz zadecydowac
 	if (am_i_master == YES)
 	{
+		printf("send to all clock = %d\n", timestamp);
 		Send_To_All(timestamp, size, rank, ARBITER_REQUEST);
 	}
 
@@ -512,6 +513,9 @@ int main(int argc, char **argv)
 		}
 		else if (status.MPI_TAG == ARBITER_REQUEST)
 		{
+			// down(semaphore_clock_id);
+			// timestamp = *lamport_clock;
+			// up(semaphore_clock_id);
 			// printf("request\n");
 			printf("timestamp=%d message=%d\n", timestamp, message);
 			if (!am_i_master || timestamp > message)
