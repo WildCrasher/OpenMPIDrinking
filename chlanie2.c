@@ -19,7 +19,7 @@
 #define TRUE (int)1
 #define ONE_INT (int)1
 #define MESSAGE_SIZE (int)1
-#define ARBITER_SIZE (int)1
+#define ARBITER_SIZE (int)3
 
 //tags
 #define GROUP_INDEX (int)1
@@ -540,7 +540,7 @@ int main(int argc, char **argv)
 		{
 			arbiter_answer_count++;
 			// printf("answer\n");
-			if (arbiter_answer_count >= size - ARBITER_SIZE)
+			if (am_i_master && arbiter_answer_count >= size - ARBITER_SIZE)
 			{
 				printf("Start to drink\n");
 				sleep(5);
