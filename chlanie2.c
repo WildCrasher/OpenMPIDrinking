@@ -581,7 +581,6 @@ int main(int argc, char **argv)
 
 					Send_Start_Drinking();
 
-					printf("Start to drink\n");
 					sleep(5);
 					arbiter_answer_count = 0;
 					am_i_master = NO;
