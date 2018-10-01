@@ -19,7 +19,7 @@
 #define TRUE (int)1
 #define ONE_INT (int)1
 #define MESSAGE_SIZE (int)1
-#define ARBITER_SIZE (int)3
+#define ARBITER_SIZE (int)1
 
 //tags
 #define GROUP_INDEX (int)1
@@ -116,7 +116,7 @@ int recvInt(int *data, int size, int source, int tag, MPI_Status *status)
 
 	down(semaphore_clock_id);
 	*lamport_clock = max(*lamport_clock, buf[size]) + 1;
-	printf("clock = %d\n", *lamport_clock);
+	printf("rank = %d clock = %d\n",rank, *lamport_clock);
 	up(semaphore_clock_id);
 	memcpy(data, buf, size * sizeof(int));
 	free(buf);
@@ -150,7 +150,7 @@ void Send_To_All(int buf, int size, int my_rank, int tag)
 		{
 			sendInt(&buf, MESSAGE_SIZE, i, tag);
 			// MPI_Send(&buf, MESSAGE_SIZE, MPI_INT, i, tag, MPI_COMM_WORLD);
-			printf("I sent to %d and my rank is %d\n", i, my_rank);
+			// printf("I sent to %d and my rank is %d\n", i, my_rank);
 		}
 	}
 }
@@ -392,9 +392,9 @@ int Check_If_Am_I_Master()
 
 void *childThread()
 {
-	printf("Start child! %d\n", rank);
+	// printf("Start child! %d\n", rank);
 
-	printf("I send to all and wait for all and my rank is %d\n", rank);
+	// printf("I send to all and wait for all and my rank is %d\n", rank);
 
 	down(semaphore_my_group_index_id);
 	int group_index = my_group_index;
@@ -419,12 +419,10 @@ void *childThread()
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
 	MPI_Barrier(MPI_COMM_WORLD);
-	printf("BARRIER my rank is %d\n", rank);
 	
-	// ten if byc moze powinien byc po barierr, Ty musisz zadecydowac
 	if (am_i_master == YES)
 	{
-		printf("send to all clock = %d\n", timestamp);
+		printf("Request arbiter\n");
 		Send_To_All(timestamp, size, rank, ARBITER_REQUEST);
 	}
 
@@ -457,7 +455,7 @@ int main(int argc, char **argv)
 	srand(time(0) + rank);
 	my_group_index = rand() % size;
 
-	printf("My group index is %d and my rank is %d\n", my_group_index, rank);
+	// printf("My group index is %d and my rank is %d\n", my_group_index, rank);
 	am_i_in_group = NO;
 	lamport_clock = malloc(sizeof(int));
 	*lamport_clock = 0;
@@ -517,15 +515,15 @@ int main(int argc, char **argv)
 			// timestamp = *lamport_clock;
 			// up(semaphore_clock_id);
 			// printf("request\n");
-			printf("timestamp=%d message=%d\n", timestamp, message);
+			// printf("timestamp=%d message=%d\n", timestamp, message);
 			if (!am_i_master || timestamp > message)
 			{
-				printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+				// printf("send arbiter answer to %d\n", status.MPI_SOURCE);
 				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
 			}
 			else if (timestamp == message && rank < status.MPI_SOURCE)
 			{
-				printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+				// printf("send arbiter answer to %d\n", status.MPI_SOURCE);
 				sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
 			}
 			else
@@ -547,7 +545,7 @@ int main(int argc, char **argv)
 				arbiter_answer_count = 0;
 				am_i_master = NO;
 				ArbiterRequest request;
-				printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
+				// printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
 				for (int i = queryIndexFirst; i < queryIndexLast; i++)
 				{
 					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
