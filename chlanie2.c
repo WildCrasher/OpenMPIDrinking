@@ -26,6 +26,8 @@
 #define ARBITER_REQUEST (int)3
 #define START_DRINKING (int)4
 #define ARBITER_ANSWER (int)5
+#define I_HAVE_YOU_REQUEST (int)6
+#define I_HAVE_YOU_ANSWER (int)7
 
 //answers
 #define NO (int)0
@@ -371,6 +373,11 @@ int *Look_For_Mates(int *group_indexes, int my_group_id)
 	return my_mates;
 }
 
+int Check_If_I_Have_You(int myTab, int rank)
+{
+	for()
+}
+
 int Check_If_Am_I_Master()
 {
 	int min = my_group[0];
@@ -517,29 +524,35 @@ int main(int argc, char **argv)
 		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
 		int arbiter_answer_count = 0;
 
+		int have_you_answer_count = 0;
+		int have_me_tab = malloc(size * sizeof(int));
+		memset(have_me_tab, -1, size * sizeof(int));
+		int have_me_count = 0;
 
 
 		while (1)
 		{
 			recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-			if (status.MPI_TAG == GROUP_INDEX)
+			if (status.MPI_TAG == I_WANT_TO_DRINK)
 			{
-				all_group_indexes[status.MPI_SOURCE] = message;
-
-				answer_count++;
-
-				if (answer_count == size)
+			}
+			else if(status.MPI_TAG == I_HAVE_YOU_REQUEST)
+			{
+				
+			}
+			else if(status.MPI_TAG == I_HAVE_YOU_ANSWER)
+			{
+				if(message == YES)
 				{
-					my_group = Look_For_Mates(all_group_indexes, all_group_indexes[rank]);
-
-					Show_Mates(my_group);
-
-					down(semaphore_am_i_in_group_id);
-					am_i_in_group = YES;
-					up(semaphore_am_i_in_group_id);
-
-					//free(all_group_indexes);
+					have_me_tab[have_me_count] = status.MPI_SOURCE;
+					have_me_count++;
+				}
+				have_you_answer_count++;
+				if(have_you_answer_count == size)
+				{
+					//sprawdza czy ok
+					have_you_answer_count = 0;
 				}
 			}
 			else if (status.MPI_TAG == ARBITER_REQUEST)
