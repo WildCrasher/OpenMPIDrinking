@@ -116,6 +116,7 @@ int sendInt(int *data, int size, int destination, int tag)
 	up(semaphore_clock_id);
 	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 	free(buf);
+	printf("tag = %d\n", tag);
 	return ret;
 }
 
