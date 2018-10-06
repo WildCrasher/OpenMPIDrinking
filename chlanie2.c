@@ -498,11 +498,7 @@ int Get_Mates_Count(int *all_mates)
 	int count = 0;
 	for (int i = 0; i < size; i++)
 	{
-<<<<<<< HEAD
 		if (all_mates[i] == -1)
-=======
-		if(all_mates[i] == -1)
->>>>>>> 8a143e38b75e2e723bca30c83f5bc504ea9d738a
 		{
 			return count;
 		}
