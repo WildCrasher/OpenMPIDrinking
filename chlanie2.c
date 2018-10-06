@@ -441,6 +441,29 @@ int *Sum_Arrays(int *first_array, int *second_array)
 	return result_array;
 }
 
+int Compare_Arrays(int *first_array, int *second_array)
+{
+	int found = NO;
+	for(int i = 0; i < size; i++)
+        {
+		for(int j = 0; j < size; j++)
+        	{
+			if(i != j && first_array[i] == second_array[j])
+			{
+				found = YES;
+				break;
+			}
+	        }
+
+		if(found == NO)
+		{
+			return NO;
+		}
+		found = NO;
+        }
+	return YES;
+}
+
 void *childThread()
 {
 	// printf("Start child! %d\n", rank);
