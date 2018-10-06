@@ -128,7 +128,7 @@ int recvInt(int *data, int size, int source, int tag, MPI_Status *status)
 
 	down(semaphore_clock_id);
 	*lamport_clock = max(*lamport_clock, buf[size]) + 1;
-	printf("rank = %d clock = %d\n", rank, *lamport_clock);
+	// printf("rank = %d clock = %d\n", rank, *lamport_clock);
 	up(semaphore_clock_id);
 	memcpy(data, buf, size * sizeof(int));
 	free(buf);
@@ -515,12 +515,11 @@ void *childThread()
 		// iteration_count++;
 		// up(semaphore_iteration_count_id);
 
-
 		Send_To_All(YES, WANT_TO_DRINK);
 
 		down(semaphore_end_of_gather_id);
 
-		while(end_of_gather != YES)
+		while (end_of_gather != YES)
 		{
 			up(semaphore_end_of_gather_id);
 			sleep(0.8);
@@ -529,10 +528,10 @@ void *childThread()
 
 		end_of_gather = NO;
 		up(semaphore_end_of_gather_id);
-		
+
 		down(semaphore_am_i_in_group_id);
 
-		if(am_i_in_group == NO)
+		if (am_i_in_group == NO)
 		{
 			up(semaphore_am_i_in_group_id);
 			memset(all_mates, -1, size * sizeof(int));
@@ -571,6 +570,7 @@ void *childThread()
 		if (master_rank != rank)
 		{
 			Send_End_Drinking();
+			master_rank = -1;
 		}
 		memset(all_mates, -1, size * sizeof(int));
 
@@ -747,10 +747,17 @@ int main(int argc, char **argv)
 						{
 							//zakonczone wybieranie
 							printf("im in group\n");
+							down(semaphore_am_i_in_group_id);
 							am_i_in_group = YES;
+							up(semaphore_am_i_in_group_id);
 						}
 						printf("ENDOFGATHER\n");
+
+						down(semaphore_end_of_gather_id);
 						end_of_gather = YES;
+						up(semaphore_end_of_gather_id);
+
+						start_drinking = NO;
 						stage_3_complete = NO;
 						answer_count = 1;
 						is_correct = 0;
@@ -773,10 +780,17 @@ int main(int argc, char **argv)
 					{
 						//zakonczone wybieranie
 						printf("im in group\n");
+						down(semaphore_am_i_in_group_id);
 						am_i_in_group = YES;
+						up(semaphore_am_i_in_group_id);
 					}
 					printf("ENDOFGATHER\n");
+
+					down(semaphore_end_of_gather_id);
 					end_of_gather = YES;
+					up(semaphore_end_of_gather_id);
+
+					start_drinking = NO;
 					stage_3_complete = NO;
 					answer_count = 1;
 					is_correct = 0;
