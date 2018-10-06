@@ -479,16 +479,16 @@ int Compare_Arrays(int *first_array, int *second_array)
 
 int Get_Mates_Count(int *all_mates)
 {
-        int count = 0;
-        for (int i = 0; i < size; i++)
-        {
-                if(all_mates[i] == -1)
-                {
-                        return count;
-                }
-                count++;
-        }
-        return count;
+	int count = 0;
+	for (int i = 0; i < size; i++)
+	{
+		if (all_mates[i] == -1)
+		{
+			return count;
+		}
+		count++;
+	}
+	return count;
 }
 
 void *childThread()
@@ -621,6 +621,12 @@ int main(int argc, char **argv)
 		memset(requests_buffer, -1, size * sizeof(int));
 		int buffer_count = 0;
 
+		int is_correct_answer_count = 0;
+		int is_correct = 0;
+
+		//Wyczyscic
+		int stage_3_complete = NO;
+
 		while (1)
 		{
 			recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
@@ -691,17 +697,42 @@ int main(int argc, char **argv)
 						message = NO;
 					Send_To_Ranks(message, IS_CORRECT, my_ranks);
 					have_you_answer_count = 1;
+
+					stage_3_complete = YES;
+					if (is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
+					{
+						if (is_correct == is_correct_answer_count)
+						{
+							//zakonczone wybieranie
+						}
+						else
+						{
+							//nowa iteracja
+						}
+						is_correct = 0;
+						is_correct_answer_count = 0;
+					}
 				}
 			}
 			else if (status.MPI_TAG == IS_CORRECT)
 			{
-				if(message == YES)
+				if (message == YES)
 				{
-
+					is_correct++;
 				}
-				else
+				is_correct_answer_count++;
+				if (stage_3_complete && is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
 				{
-					
+					if (is_correct == is_correct_answer_count)
+					{
+						//zakonczone wybieranie
+					}
+					else
+					{
+						//nowa iteracja
+					}
+					is_correct = 0;
+					is_correct_answer_count = 0;
 				}
 			}
 			else if (status.MPI_TAG == ARBITER_REQUEST)
