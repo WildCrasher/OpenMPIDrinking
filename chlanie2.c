@@ -116,7 +116,7 @@ int sendInt(int *data, int size, int destination, int tag)
 	up(semaphore_clock_id);
 	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 	free(buf);
-	printf("tag = %d\n", tag);
+	// printf("tag = %d\n", tag);
 	return ret;
 }
 
@@ -535,6 +535,7 @@ void *childThread()
 		if(am_i_in_group == NO)
 		{
 			up(semaphore_am_i_in_group_id);
+			memset(all_mates, -1, size * sizeof(int));
 			continue;
 		}
 
@@ -571,6 +572,7 @@ void *childThread()
 		{
 			Send_End_Drinking();
 		}
+		memset(all_mates, -1, size * sizeof(int));
 
 		down(semaphore_am_i_in_group_id);
 		am_i_in_group = NO;
@@ -744,6 +746,7 @@ int main(int argc, char **argv)
 						if (is_correct == is_correct_answer_count)
 						{
 							//zakonczone wybieranie
+							printf("im in group\n");
 							am_i_in_group = YES;
 						}
 						printf("ENDOFGATHER\n");
@@ -752,6 +755,8 @@ int main(int argc, char **argv)
 						answer_count = 1;
 						is_correct = 0;
 						is_correct_answer_count = 0;
+						memset(have_me_tab, -1, size * sizeof(int));
+						have_me_count = 1;
 					}
 				}
 			}
@@ -767,6 +772,7 @@ int main(int argc, char **argv)
 					if (is_correct == is_correct_answer_count)
 					{
 						//zakonczone wybieranie
+						printf("im in group\n");
 						am_i_in_group = YES;
 					}
 					printf("ENDOFGATHER\n");
@@ -775,6 +781,8 @@ int main(int argc, char **argv)
 					answer_count = 1;
 					is_correct = 0;
 					is_correct_answer_count = 0;
+					memset(have_me_tab, -1, size * sizeof(int));
+					have_me_count = 1;
 				}
 			}
 			else if (status.MPI_TAG == ARBITER_REQUEST)
