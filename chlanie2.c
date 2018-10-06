@@ -21,7 +21,7 @@
 #define ARBITER_SIZE (int)1
 
 //tags
-#define GROUP_INDEX (int)1
+#define WANT_TO_DRINK (int)1
 #define ANSWER (int)2
 #define ARBITER_REQUEST (int)3
 #define START_DRINKING (int)4
@@ -507,12 +507,12 @@ int main(int argc, char **argv)
 		int message = -1;
 
 		int answer_count = 1;
-		int *all_group_indexes = malloc(size * sizeof(int));
-		memset(all_group_indexes, -1, size * sizeof(int));
+		int *all_mates = malloc(size * sizeof(int));
+		memset(all_mates, -1, size * sizeof(int));
 
-		down(semaphore_my_group_index_id);
-		all_group_indexes[rank] = my_group_index;
-		up(semaphore_my_group_index_id);
+	//	down(semaphore_my_group_index_id);
+	//	all_group_indexes[rank] = my_group_index;
+	//	up(semaphore_my_group_index_id);
 
 		int queryIndexLast = 0;
 		int queryIndexFirst = 0;
@@ -525,9 +525,9 @@ int main(int argc, char **argv)
 		{
 			recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-			if (status.MPI_TAG == GROUP_INDEX)
+			if (status.MPI_TAG == WANT_TO_DRINK)
 			{
-				all_group_indexes[status.MPI_SOURCE] = message;
+				all_mates = message;
 
 				answer_count++;
 
