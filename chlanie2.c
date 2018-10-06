@@ -448,7 +448,7 @@ void *childThread()
 	down(semaphore_clock_id);
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
-
+	
 	if (am_i_master == YES)
 	{
 		printf("Request arbiter\n");
