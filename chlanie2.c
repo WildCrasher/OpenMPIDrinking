@@ -170,13 +170,10 @@ void Send_End_Drinking()
 {
 	int my_rank = rank;
 	int message = YES;
-	
+
 	sendInt(&message, MESSAGE_SIZE, master_rank, END_DRINKING);
 	printf("I sent to %d and my rank is %d\n", master_rank, my_rank);
 }
-
-
-
 
 void Send_To_Ranks(int buf, int tag, int ranks[])
 {
@@ -190,14 +187,13 @@ void Send_To_Ranks(int buf, int tag, int ranks[])
 	}
 }
 
-
 void Send_Start_Drinking()
 {
 	int my_rank = rank;
 
 	for (int i = 0; i < size; i++)
 	{
-		if(all_mates[i] == -1)
+		if (all_mates[i] == -1)
 		{
 			break;
 		}
@@ -509,7 +505,7 @@ int Get_Mates_Count(int *all_mates)
 
 void *childThread()
 {
-	while(1)
+	while (1)
 	{
 		// printf("Start child! %d\n", rank);
 
@@ -558,22 +554,11 @@ void *childThread()
 
 		sleep(5);
 
-		if(master_rank != rank)
+		if (master_rank != rank)
 		{
 			Send_End_Drinking();
 		}
 
-		/*		down(semaphore_end_drinking_id);
-
-				while (end_drinking != YES)
-				{
-				up(semaphore_end_drinking_id);
-				sleep(0.8);
-				down(semaphore_end_drinking_id);
-				}
-
-				up(semaphore_end_drinking_id);
-				*/
 		printf("End of drinking and my rank is %d\n", rank);
 	}
 	return NULL;
@@ -810,18 +795,6 @@ int main(int argc, char **argv)
 					up(semaphore_start_drinking_id);
 
 					Send_Start_Drinking();
-
-					sleep(5);
-
-					arbiter_answer_count = 0;
-					master_rank = -1;
-					ArbiterRequest request;
-					printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
-					for (int i = queryIndexFirst; i < queryIndexLast; i++)
-					{
-						request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
-						sendInt(&rank, 1, request.rank, ARBITER_ANSWER);
-					}
 				}
 			}
 			else if (status.MPI_TAG == START_DRINKING)
@@ -830,11 +803,17 @@ int main(int argc, char **argv)
 				start_drinking = YES;
 				up(semaphore_start_drinking_id);
 			}
-			else if(status.MPI_TAG == END_DRINKING)
+			else if (status.MPI_TAG == END_DRINKING)
 			{
-				down(semaphore_end_drinking_id);
-				end_drinking = YES;
-				up(semaphore_end_drinking_id);
+				arbiter_answer_count = 0;
+				master_rank = -1;
+				ArbiterRequest request;
+				printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
+				for (int i = queryIndexFirst; i < queryIndexLast; i++)
+				{
+					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
+					sendInt(&rank, 1, request.rank, ARBITER_ANSWER);
+				}
 			}
 		}
 
