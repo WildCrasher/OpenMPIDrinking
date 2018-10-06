@@ -67,6 +67,9 @@ int semaphore_clock_id;
 int start_drinking;
 int semaphore_start_drinking_id;
 
+// int iteration_count;
+// int semphore_iteration_count_id;
+
 int am_i_in_group;
 int *lamport_clock;
 
@@ -443,6 +446,9 @@ void *childThread()
 	// printf("Start child! %d\n", rank);
 
 	// printf("I send to all and wait for all and my rank is %d\n", rank);
+	// down(semphore_iteration_count_id);
+	// iteration_count++;
+	// up(semaphore_iteration_count_id);
 
 	Send_To_All(YES, WANT_TO_DRINK);
 
@@ -509,9 +515,14 @@ int main(int argc, char **argv)
 	semaphore_start_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_start_drinking_id, 0, SETVAL, (int)1);
 
+	// semaphore_iteration_count_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
+	// semctl(semaphore_iteration_count_id, 0, SETVAL, (int)1);
+
+
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	// iteration_count = 0;
 
 	if (size < 2)
 	{
@@ -559,7 +570,7 @@ int main(int argc, char **argv)
 
 		int *requests_buffer = malloc(size * sizeof(int));
 		memset(requests_buffer, -1, size * sizeof(int));
-		int buffer_count = 1;
+		int buffer_count = 0;
 
 		while (1)
 		{
@@ -587,8 +598,15 @@ int main(int argc, char **argv)
 				if (answer_count == size)
 				{
 					Show_Mates(all_mates);
+					for(int i=0; i<buffer_count; i++)
+					{
+						message = Check_If_I_Have_You(all_mates, requests_buffer[i]);
+						sendInt(&message, 1, requests_buffer[i], I_HAVE_YOU_ANSWER);
+					}
+					buffer_count = 0;
+					int buf = -1;
+					Send_To_All(buf, I_HAVE_YOU_REQUEST);
 					//answer_count musi byc czyszczone
-					//odpowiada zbuforowanym requestom
 					// answer_count = 1; Pamietac zeby wyczyscic przy nowej iteracji
 					//free(all_group_indexes);
 				}
@@ -602,7 +620,8 @@ int main(int argc, char **argv)
 				}
 				else
 				{
-
+					requests_buffer[buffer_count] = status.MPI_SOURCE;
+					buffer_count++;
 				}
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_ANSWER)
