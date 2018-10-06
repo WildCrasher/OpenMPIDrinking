@@ -419,6 +419,20 @@ void Add_Mate_To_Group(int mate_rank, int *all_mates)
 	}
 }
 
+int *Sum_Arrays(int *first_array, int *second_array)
+{
+	int *result_array = malloc(size * sizeof(int));
+	memset(result_array, -1, size * sizeof(int));
+
+	for(int i = 0; i < size; i++)
+	{
+		Add_Mate_To_Group(first_array[i], result_array);
+		Add_Mate_To_Group(second_array[i], result_array);
+	}	
+
+	return result_array;
+}
+
 void *childThread()
 {
 	// printf("Start child! %d\n", rank);
@@ -527,17 +541,12 @@ int main(int argc, char **argv)
 		int *all_mates = malloc(size * sizeof(int));
 		memset(all_mates, -1, size * sizeof(int));
 
-		//	down(semaphore_my_group_index_id);
-		//	all_group_indexes[rank] = my_group_index;
-		//	up(semaphore_my_group_index_id);
-
-		int i_want_to_drink = YES;
 		int queryIndexLast = 0;
 		int queryIndexFirst = 0;
 		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
 		int arbiter_answer_count = 0;
 
-		int have_you_answer_count = 0;
+		int have_you_answer_count = 1;
 		int have_me_tab = malloc(size * sizeof(int));
 		memset(have_me_tab, -1, size * sizeof(int));
 		int have_me_count = 0;
@@ -568,12 +577,7 @@ int main(int argc, char **argv)
 				if (answer_count == size)
 				{
 					Show_Mates(all_mates);
-
-					down(semaphore_am_i_in_group_id);
-					am_i_in_group = YES;
-					up(semaphore_am_i_in_group_id);
-
-					answer_count = 1;
+					//answer_count musi byc czyszczone
 					//free(all_group_indexes);
 				}
 			}
@@ -591,7 +595,7 @@ int main(int argc, char **argv)
 				if (have_you_answer_count == size)
 				{
 					//sprawdza czy ok
-					have_you_answer_count = 0;
+					have_you_answer_count = 1;
 				}
 			}
 			else if (status.MPI_TAG == ARBITER_REQUEST)
