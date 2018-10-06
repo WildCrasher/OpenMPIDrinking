@@ -526,8 +526,9 @@ void *childThread()
 			down(semaphore_end_of_gather_id);
 		}
 
+		end_of_gather = NO;
 		up(semaphore_end_of_gather_id);
-
+		
 		down(semaphore_am_i_in_group_id);
 
 		if(am_i_in_group == NO)
@@ -569,6 +570,10 @@ void *childThread()
 		{
 			Send_End_Drinking();
 		}
+
+		down(semaphore_am_i_in_group_id);
+		am_i_in_group = NO;
+		up(semaphore_am_i_in_group_id);
 
 		printf("End of drinking and my rank is %d\n", rank);
 	}
