@@ -29,6 +29,7 @@
 #define ARBITER_ANSWER (int)5
 #define I_HAVE_YOU_REQUEST (int)6
 #define I_HAVE_YOU_ANSWER (int)7
+#define END_DRINKING (int)8
 
 //answers
 #define NO (int)0
@@ -67,13 +68,17 @@ int semaphore_clock_id;
 int start_drinking;
 int semaphore_start_drinking_id;
 
+int end_drinking;
+int semaphore_end_drinking_id;
+
 // int iteration_count;
 // int semphore_iteration_count_id;
 
 int am_i_in_group;
 int *lamport_clock;
+int *all_mates;
 
-int am_i_master;
+int master_rank;
 
 int timestamp;
 
@@ -160,23 +165,33 @@ void Send_To_All(int buf, int tag)
 	}
 }
 
-/*
+void Send_End_Drinking()
+{
+	int my_rank = rank;
+	int message = YES;
+	
+	sendInt(&message, MESSAGE_SIZE, master_rank, END_DRINKING);
+	printf("I sent to %d and my rank is %d\n", master_rank, my_rank);
+}
+
+
+
 void Send_Start_Drinking()
 {
 	int my_rank = rank;
 
 	for (int i = 0; i < size; i++)
 	{
-		if(my_group[i] == -1)
+		if(all_mates[i] == -1)
 		{
 			break;
 		}
 
-		sendInt(&my_group_index, MESSAGE_SIZE, my_group[i], START_DRINKING);
-		printf("I sent to %d and my rank is %d\n", my_group[i], my_rank);
+		int message = YES;
+		sendInt(&message, MESSAGE_SIZE, all_mates[i], START_DRINKING);
+		printf("I sent to %d and my rank is %d\n", all_mates[i], my_rank);
 	}
-
-}*/
+}
 
 void Show_Mates(int *my_mates)
 {
@@ -388,28 +403,27 @@ int Check_If_I_Have_You(int myTab[], int rank)
 	return NO;
 }
 
-/*
-int Check_If_Am_I_Master()
+int Find_Master()
 {
-	int min = my_group[0];
+	int min = all_mates[0];
 	for (int i = 1; i < size; i++)
 	{
-		if (my_group[i] == -1)
+		if (all_mates[i] == -1)
 		{
 			break;
 		}
-		if (my_group[i] < min)
+		if (all_mates[i] < min)
 		{
-			min = my_group[i];
+			min = all_mates[i];
 		}
 	}
 
 	if (min > rank)
 	{
-		return YES;
+		return rank;
 	}
-	return NO;
-}*/
+	return min;
+}
 
 void Add_Mate_To_Group(int mate_rank, int *all_mates)
 {
@@ -445,90 +459,108 @@ int Compare_Arrays(int *first_array, int *second_array)
 {
 	int found = NO;
 	for(int i = 0; i < size; i++)
-        {
+	{
 		for(int j = 0; j < size; j++)
-        	{
+		{
 			if(i != j && first_array[i] == second_array[j])
 			{
 				found = YES;
 				break;
 			}
-	        }
+		}
 
 		if(found == NO)
 		{
 			return NO;
 		}
 		found = NO;
-        }
+	}
 	return YES;
 }
 
 int Get_Mates_Count(int *all_mates)
 {
-        int count = 0;
-        for (int i = 0; i < size; i++)
-        {
-                if(all_mates[i] == -1)
-                {
-                        return count;
-                }
-                count++;
-        }
-        return count;
+	int count = 0;
+	for (int i = 0; i < size; i++)
+	{
+		if(all_mates[i] == -1)
+		{
+			return count;
+		}
+		count++;
+	}
+	return count;
 }
 
 void *childThread()
 {
-	// printf("Start child! %d\n", rank);
-
-	// printf("I send to all and wait for all and my rank is %d\n", rank);
-	// down(semphore_iteration_count_id);
-	// iteration_count++;
-	// up(semaphore_iteration_count_id);
-
-	Send_To_All(YES, WANT_TO_DRINK);
-
-	down(semaphore_am_i_in_group_id);
-
-	while (am_i_in_group != YES)
+	while(1)
 	{
-		up(semaphore_am_i_in_group_id);
-		sleep(0.8);
+		// printf("Start child! %d\n", rank);
+
+		// printf("I send to all and wait for all and my rank is %d\n", rank);
+		// down(semphore_iteration_count_id);
+		// iteration_count++;
+		// up(semaphore_iteration_count_id);
+
+		Send_To_All(YES, WANT_TO_DRINK);
+
 		down(semaphore_am_i_in_group_id);
-	}
 
-	up(semaphore_am_i_in_group_id);
+		while (am_i_in_group != YES)
+		{
+			up(semaphore_am_i_in_group_id);
+			sleep(0.8);
+			down(semaphore_am_i_in_group_id);
+		}
 
-	//am_i_master = Check_If_Am_I_Master();
+		up(semaphore_am_i_in_group_id);
 
-	down(semaphore_clock_id);
-	timestamp = *lamport_clock;
-	up(semaphore_clock_id);
-	
-	if (am_i_master == YES)
-	{
-		printf("Request arbiter\n");
-		Send_To_All(timestamp, ARBITER_REQUEST);
-	}
+		master_rank = Find_Master();
 
-	down(semaphore_start_drinking_id);
+		down(semaphore_clock_id);
+		timestamp = *lamport_clock;
+		up(semaphore_clock_id);
 
-	while (start_drinking != YES)
-	{
-		up(semaphore_start_drinking_id);
-		sleep(0.8);
+		if (master_rank == rank)
+		{
+			printf("Request arbiter\n");
+			Send_To_All(timestamp, ARBITER_REQUEST);
+		}
+
 		down(semaphore_start_drinking_id);
+
+		while (start_drinking != YES)
+		{
+			up(semaphore_start_drinking_id);
+			sleep(0.8);
+			down(semaphore_start_drinking_id);
+		}
+
+		up(semaphore_start_drinking_id);
+
+		printf("Start drinking and my rank is%d\n", rank);
+
+		sleep(5);
+
+		if(master_rank != rank)
+		{
+			Send_End_Drinking();
+		}
+
+		/*		down(semaphore_end_drinking_id);
+
+				while (end_drinking != YES)
+				{
+				up(semaphore_end_drinking_id);
+				sleep(0.8);
+				down(semaphore_end_drinking_id);
+				}
+
+				up(semaphore_end_drinking_id);
+				*/
+		printf("End of drinking and my rank is %d\n", rank);
 	}
-
-	up(semaphore_start_drinking_id);
-
-	//	printf("Start drinking and my group index is %d and my rank is%d\n", my_group_index, rank);
-
-	sleep(5);
-
-	//	printf("End of drinking and my group index is %d and my rank is %d\n", my_group_index, rank);
-
 	return NULL;
 }
 
@@ -552,6 +584,9 @@ int main(int argc, char **argv)
 	semaphore_start_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_start_drinking_id, 0, SETVAL, (int)1);
 
+	semaphore_end_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
+	semctl(semaphore_end_drinking_id, 0, SETVAL, (int)1);
+
 	// semaphore_iteration_count_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	// semctl(semaphore_iteration_count_id, 0, SETVAL, (int)1);
 
@@ -569,6 +604,7 @@ int main(int argc, char **argv)
 		semctl(semaphore_my_group_index_id, 0, IPC_RMID);
 		semctl(semaphore_clock_id, 0, IPC_RMID);
 		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
+		semctl(semaphore_end_drinking_id, 0, IPC_RMID);
 
 		MPI_Finalize();
 		return 0;
@@ -582,8 +618,9 @@ int main(int argc, char **argv)
 		am_i_in_group = NO;
 		lamport_clock = malloc(sizeof(int));
 		*lamport_clock = 0;
-		am_i_master = NO;
+		master_rank = -1;
 		start_drinking = NO;
+		end_drinking = NO;
 
 		pthread_t thread;
 		pthread_create(&thread, NULL, childThread, NULL);
@@ -591,7 +628,7 @@ int main(int argc, char **argv)
 		int message = -1;
 
 		int answer_count = 1;
-		int *all_mates = malloc(size * sizeof(int));
+		all_mates = malloc(size * sizeof(int));
 		memset(all_mates, -1, size * sizeof(int));
 
 		int i_want_to_drink = YES;
@@ -682,7 +719,7 @@ int main(int argc, char **argv)
 				// up(semaphore_clock_id);
 				// printf("request\n");
 				printf("timestamp=%d message=%d\n", timestamp, message);
-				if (!am_i_master || timestamp > message)
+				if (master_rank != rank || timestamp > message)
 				{
 					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
 					sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
@@ -704,17 +741,18 @@ int main(int argc, char **argv)
 			{
 				arbiter_answer_count++;
 				// printf("answer\n");
-				if (am_i_master && arbiter_answer_count >= size - ARBITER_SIZE)
+				if (master_rank == rank && arbiter_answer_count >= size - ARBITER_SIZE)
 				{
 					down(semaphore_start_drinking_id);
 					start_drinking = YES;
 					up(semaphore_start_drinking_id);
 
-					//Send_Start_Drinking();
+					Send_Start_Drinking();
 
 					sleep(5);
+
 					arbiter_answer_count = 0;
-					am_i_master = NO;
+					master_rank = -1;
 					ArbiterRequest request;
 					printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
 					for (int i = queryIndexFirst; i < queryIndexLast; i++)
@@ -730,6 +768,12 @@ int main(int argc, char **argv)
 				start_drinking = YES;
 				up(semaphore_start_drinking_id);
 			}
+			else if(status.MPI_TAG == END_DRINKING)
+			{
+				down(semaphore_end_drinking_id);
+				end_drinking = YES;
+				up(semaphore_end_drinking_id);
+			}
 		}
 
 		printf("I remove semaphores\n");
@@ -742,7 +786,8 @@ int main(int argc, char **argv)
 		semctl(semaphore_clock_id, 0, IPC_RMID);
 
 		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
-		//	free(my_group);
+
+		semctl(semaphore_end_drinking_id, 0, IPC_RMID);
 		printf("MPI finallize\n");
 		MPI_Finalize();
 		return 0;
