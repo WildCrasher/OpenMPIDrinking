@@ -535,6 +535,7 @@ void *childThread()
 		if(am_i_in_group == NO)
 		{
 			up(semaphore_am_i_in_group_id);
+			memset(all_mates, -1, size * sizeof(int));
 			continue;
 		}
 
@@ -570,7 +571,10 @@ void *childThread()
 		if (master_rank != rank)
 		{
 			Send_End_Drinking();
+			master_rank = -1;
 		}
+		
+		memset(all_mates, -1, size * sizeof(int));
 
 		down(semaphore_am_i_in_group_id);
 		am_i_in_group = NO;
@@ -744,10 +748,17 @@ int main(int argc, char **argv)
 						if (is_correct == is_correct_answer_count)
 						{
 							//zakonczone wybieranie
+							down(semaphore_am_i_in_group_id);
 							am_i_in_group = YES;
+							up(semaphore_am_i_in_group_id);
 						}
 						printf("ENDOFGATHER\n");
-						end_of_gather = YES;
+						
+						down(semaphore_end_of_gather_id);
+                                        	end_of_gather = YES;
+                                        	up(semaphore_end_of_gather_id);
+
+						start_drinking = NO;
 						stage_3_complete = NO;
 						answer_count = 1;
 						is_correct = 0;
@@ -767,10 +778,17 @@ int main(int argc, char **argv)
 					if (is_correct == is_correct_answer_count)
 					{
 						//zakonczone wybieranie
-						am_i_in_group = YES;
+						down(semaphore_am_i_in_group_id);
+                                                am_i_in_group = YES;
+                                                up(semaphore_am_i_in_group_id);
 					}
 					printf("ENDOFGATHER\n");
+
+					down(semaphore_end_of_gather_id);
 					end_of_gather = YES;
+					up(semaphore_end_of_gather_id);
+
+					start_drinking = NO;
 					stage_3_complete = NO;
 					answer_count = 1;
 					is_correct = 0;
