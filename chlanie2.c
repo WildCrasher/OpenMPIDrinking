@@ -437,8 +437,6 @@ void *childThread()
 	down(semaphore_clock_id);
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
-
-	MPI_Barrier(MPI_COMM_WORLD);
 	
 	if (am_i_master == YES)
 	{
