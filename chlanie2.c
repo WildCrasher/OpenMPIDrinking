@@ -69,8 +69,8 @@ int semaphore_clock_id;
 int start_drinking;
 int semaphore_start_drinking_id;
 
-int end_drinking;
-int semaphore_end_drinking_id;
+int end_of_gather;
+int semaphore_end_of_gather_id;
 
 // int iteration_count;
 // int semphore_iteration_count_id;
@@ -514,15 +514,26 @@ void *childThread()
 		// iteration_count++;
 		// up(semaphore_iteration_count_id);
 
+
 		Send_To_All(YES, WANT_TO_DRINK);
+
+		down(semaphore_end_of_gather_id);
+
+		while(end_of_gather != YES)
+		{
+			up(semaphore_end_of_gather_id);
+			sleep(0.8);
+			down(semaphore_end_of_gather_id);
+		}
+
+		up(semaphore_end_of_gather_id);
 
 		down(semaphore_am_i_in_group_id);
 
-		while (am_i_in_group != YES)
+		if(am_i_in_group == NO)
 		{
 			up(semaphore_am_i_in_group_id);
-			sleep(0.8);
-			down(semaphore_am_i_in_group_id);
+			continue;
 		}
 
 		up(semaphore_am_i_in_group_id);
@@ -584,8 +595,8 @@ int main(int argc, char **argv)
 	semaphore_start_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	semctl(semaphore_start_drinking_id, 0, SETVAL, (int)1);
 
-	semaphore_end_drinking_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
-	semctl(semaphore_end_drinking_id, 0, SETVAL, (int)1);
+	semaphore_end_of_gather_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
+	semctl(semaphore_end_of_gather_id, 0, SETVAL, (int)1);
 
 	// semaphore_iteration_count_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	// semctl(semaphore_iteration_count_id, 0, SETVAL, (int)1);
@@ -603,7 +614,7 @@ int main(int argc, char **argv)
 		semctl(semaphore_my_group_index_id, 0, IPC_RMID);
 		semctl(semaphore_clock_id, 0, IPC_RMID);
 		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
-		semctl(semaphore_end_drinking_id, 0, IPC_RMID);
+		semctl(semaphore_end_of_gather_id, 0, IPC_RMID);
 
 		MPI_Finalize();
 		return 0;
@@ -619,7 +630,7 @@ int main(int argc, char **argv)
 		*lamport_clock = 0;
 		master_rank = -1;
 		start_drinking = NO;
-		end_drinking = NO;
+		end_of_gather = NO;
 
 		pthread_t thread;
 		pthread_create(&thread, NULL, childThread, NULL);
@@ -648,7 +659,6 @@ int main(int argc, char **argv)
 		int is_correct_answer_count = 0;
 		int is_correct = 0;
 
-		//Wyczyscic
 		int stage_3_complete = NO;
 
 		while (1)
@@ -728,11 +738,12 @@ int main(int argc, char **argv)
 						if (is_correct == is_correct_answer_count)
 						{
 							//zakonczone wybieranie
+							am_i_in_group = YES;
 						}
-						else
-						{
-							//nowa iteracja
-						}
+						printf("ENDOFGATHER\n");
+						end_of_gather = YES;
+						stage_3_complete = NO;
+						answer_count = 1;
 						is_correct = 0;
 						is_correct_answer_count = 0;
 					}
@@ -750,11 +761,12 @@ int main(int argc, char **argv)
 					if (is_correct == is_correct_answer_count)
 					{
 						//zakonczone wybieranie
+						am_i_in_group = YES;
 					}
-					else
-					{
-						//nowa iteracja
-					}
+					printf("ENDOFGATHER\n");
+					end_of_gather = YES;
+					stage_3_complete = NO;
+					answer_count = 1;
 					is_correct = 0;
 					is_correct_answer_count = 0;
 				}
@@ -828,7 +840,7 @@ int main(int argc, char **argv)
 
 		semctl(semaphore_start_drinking_id, 0, IPC_RMID);
 
-		semctl(semaphore_end_drinking_id, 0, IPC_RMID);
+		semctl(semaphore_end_of_gather_id, 0, IPC_RMID);
 		printf("MPI finallize\n");
 		MPI_Finalize();
 		return 0;
