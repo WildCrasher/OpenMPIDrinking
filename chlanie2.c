@@ -375,9 +375,14 @@ int *Look_For_Mates(int *group_indexes, int my_group_id)
 	return my_mates;
 }
 
-int Check_If_I_Have_You(int myTab, int rank)
+int Check_If_I_Have_You(int myTab[], int rank)
 {
-	for ()
+	for (int i = 0; i < size; i++)
+	{
+		if (myTab[i] == rank)
+			return YES;
+	}
+	return NO;
 }
 
 /*
@@ -541,15 +546,20 @@ int main(int argc, char **argv)
 		int *all_mates = malloc(size * sizeof(int));
 		memset(all_mates, -1, size * sizeof(int));
 
+		int i_want_to_drink = YES;
 		int queryIndexLast = 0;
 		int queryIndexFirst = 0;
 		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
 		int arbiter_answer_count = 0;
 
 		int have_you_answer_count = 1;
-		int have_me_tab = malloc(size * sizeof(int));
+		int *have_me_tab = malloc(size * sizeof(int));
 		memset(have_me_tab, -1, size * sizeof(int));
-		int have_me_count = 0;
+		int have_me_count = 1;
+
+		int *requests_buffer = malloc(size * sizeof(int));
+		memset(requests_buffer, -1, size * sizeof(int));
+		int buffer_count = 1;
 
 		while (1)
 		{
@@ -578,11 +588,22 @@ int main(int argc, char **argv)
 				{
 					Show_Mates(all_mates);
 					//answer_count musi byc czyszczone
+					//odpowiada zbuforowanym requestom
+					// answer_count = 1; Pamietac zeby wyczyscic przy nowej iteracji
 					//free(all_group_indexes);
 				}
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_REQUEST)
 			{
+				if(answer_count == size)
+				{
+					message = Check_If_I_Have_You(all_mates, status.MPI_SOURCE);
+					sendInt(&message, 1, status.MPI_SOURCE, I_HAVE_YOU_ANSWER);
+				}
+				else
+				{
+
+				}
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_ANSWER)
 			{
