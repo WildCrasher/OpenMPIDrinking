@@ -464,6 +464,20 @@ int Compare_Arrays(int *first_array, int *second_array)
 	return YES;
 }
 
+int Get_Mates_Count(int *all_mates)
+{
+        int count = 0;
+        for (int i = 0; i < size; i++)
+        {
+                if(all_mates[i] == -1)
+                {
+                        return count;
+                }
+                count++;
+        }
+        return count;
+}
+
 void *childThread()
 {
 	// printf("Start child! %d\n", rank);
