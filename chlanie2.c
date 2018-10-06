@@ -422,8 +422,6 @@ void *childThread()
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	
 	if (am_i_master == YES)
 	{
 		printf("Request arbiter\n");
