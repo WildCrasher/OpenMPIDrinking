@@ -14,6 +14,7 @@
 #include <assert.h>
 
 //normal consts
+#define ONE_INT (int)1
 #define SEMCOUNT (int)1
 #define FALSE (int)0
 #define TRUE (int)1
@@ -21,7 +22,7 @@
 #define ARBITER_SIZE (int)1
 
 //tags
-#define GROUP_INDEX (int)1
+#define WANT_TO_DRINK (int)1
 #define ANSWER (int)2
 #define ARBITER_REQUEST (int)3
 #define START_DRINKING (int)4
@@ -66,9 +67,8 @@ int semaphore_clock_id;
 int start_drinking;
 int semaphore_start_drinking_id;
 
-int my_group_index, am_i_in_group;
+int am_i_in_group;
 int *lamport_clock;
-int *my_group;
 
 int am_i_master;
 
@@ -118,7 +118,7 @@ int recvInt(int *data, int size, int source, int tag, MPI_Status *status)
 
 	down(semaphore_clock_id);
 	*lamport_clock = max(*lamport_clock, buf[size]) + 1;
-	printf("rank = %d clock = %d\n",rank, *lamport_clock);
+	printf("rank = %d clock = %d\n", rank, *lamport_clock);
 	up(semaphore_clock_id);
 	memcpy(data, buf, size * sizeof(int));
 	free(buf);
@@ -144,8 +144,9 @@ ArbiterRequest Pick_From_Query(ArbiterRequest *query, int *queryFirstIndex, int 
 	return dummy;
 }
 
-void Send_To_All(int buf, int size, int my_rank, int tag)
+void Send_To_All(int buf, int tag)
 {
+	int my_rank = rank;
 	for (int i = 0; i < size; i++)
 	{
 		if (i != my_rank)
@@ -156,6 +157,7 @@ void Send_To_All(int buf, int size, int my_rank, int tag)
 	}
 }
 
+/*
 void Send_Start_Drinking()
 {
 	int my_rank = rank;
@@ -171,7 +173,7 @@ void Send_Start_Drinking()
 		printf("I sent to %d and my rank is %d\n", my_group[i], my_rank);
 	}
 
-}
+}*/
 
 void Show_Mates(int *my_mates)
 {
@@ -375,9 +377,10 @@ int *Look_For_Mates(int *group_indexes, int my_group_id)
 
 int Check_If_I_Have_You(int myTab, int rank)
 {
-	for()
+	for ()
 }
 
+/*
 int Check_If_Am_I_Master()
 {
 	int min = my_group[0];
@@ -398,6 +401,22 @@ int Check_If_Am_I_Master()
 		return YES;
 	}
 	return NO;
+}*/
+
+void Add_Mate_To_Group(int mate_rank, int *all_mates)
+{
+	for (int i = 0; i < size; i++)
+	{
+		if (all_mates[i] == -1)
+		{
+			all_mates[i] = mate_rank;
+			break;
+		}
+		else if (all_mates[i] == mate_rank)
+		{
+			break;
+		}
+	}
 }
 
 void *childThread()
@@ -406,11 +425,7 @@ void *childThread()
 
 	// printf("I send to all and wait for all and my rank is %d\n", rank);
 
-	down(semaphore_my_group_index_id);
-	int group_index = my_group_index;
-	up(semaphore_my_group_index_id);
-
-	Send_To_All(group_index, size, rank, GROUP_INDEX);
+	Send_To_All(YES, WANT_TO_DRINK);
 
 	down(semaphore_am_i_in_group_id);
 
@@ -423,7 +438,7 @@ void *childThread()
 
 	up(semaphore_am_i_in_group_id);
 
-	am_i_master = Check_If_Am_I_Master();
+	//am_i_master = Check_If_Am_I_Master();
 
 	down(semaphore_clock_id);
 	timestamp = *lamport_clock;
@@ -432,7 +447,7 @@ void *childThread()
 	if (am_i_master == YES)
 	{
 		printf("Request arbiter\n");
-		Send_To_All(timestamp, size, rank, ARBITER_REQUEST);
+		Send_To_All(timestamp, ARBITER_REQUEST);
 	}
 
 	down(semaphore_start_drinking_id);
@@ -446,11 +461,11 @@ void *childThread()
 
 	up(semaphore_start_drinking_id);
 
-	printf("Start drinking and my group index is %d and my rank is%d\n", my_group_index, rank);
+	//	printf("Start drinking and my group index is %d and my rank is%d\n", my_group_index, rank);
 
 	sleep(5);
 
-	printf("End of drinking and my group index is %d and my rank is %d\n", my_group_index, rank);
+	//	printf("End of drinking and my group index is %d and my rank is %d\n", my_group_index, rank);
 
 	return NULL;
 }
@@ -479,7 +494,7 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	if(size < 2)
+	if (size < 2)
 	{
 		printf("Create more competitors\n");
 
@@ -494,9 +509,8 @@ int main(int argc, char **argv)
 	else
 	{
 		srand(time(0) + rank);
-		my_group_index = rand() % size;
 
-		printf("My group index is %d and my rank is %d\n", my_group_index, rank);
+		printf("My rank is %d\n", rank);
 
 		am_i_in_group = NO;
 		lamport_clock = malloc(sizeof(int));
@@ -504,21 +518,20 @@ int main(int argc, char **argv)
 		am_i_master = NO;
 		start_drinking = NO;
 
-		MPI_Barrier(MPI_COMM_WORLD);
-
 		pthread_t thread;
 		pthread_create(&thread, NULL, childThread, NULL);
 
 		int message = -1;
 
 		int answer_count = 1;
-		int *all_group_indexes = malloc(size * sizeof(int));
-		memset(all_group_indexes, -1, size * sizeof(int));
+		int *all_mates = malloc(size * sizeof(int));
+		memset(all_mates, -1, size * sizeof(int));
 
-		down(semaphore_my_group_index_id);
-		all_group_indexes[rank] = my_group_index;
-		up(semaphore_my_group_index_id);
+		//	down(semaphore_my_group_index_id);
+		//	all_group_indexes[rank] = my_group_index;
+		//	up(semaphore_my_group_index_id);
 
+		int i_want_to_drink = YES;
 		int queryIndexLast = 0;
 		int queryIndexFirst = 0;
 		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
@@ -529,27 +542,53 @@ int main(int argc, char **argv)
 		memset(have_me_tab, -1, size * sizeof(int));
 		int have_me_count = 0;
 
-
 		while (1)
 		{
 			recvInt(&message, MESSAGE_SIZE, MPI_ANY_SOURCE, MPI_ANY_TAG, &status);
 
-			if (status.MPI_TAG == I_WANT_TO_DRINK)
+			if (status.MPI_TAG == WANT_TO_DRINK)
+			{
+				if (i_want_to_drink == YES)
+				{
+					message = YES;
+					sendInt(&message, ONE_INT, status.MPI_SOURCE, ANSWER);
+				}
+				else
+				{
+					message = NO;
+					sendInt(&message, ONE_INT, status.MPI_SOURCE, ANSWER);
+				}
+			}
+			else if (status.MPI_TAG == ANSWER)
+			{
+				Add_Mate_To_Group(status.MPI_SOURCE, all_mates);
+
+				answer_count++;
+
+				if (answer_count == size)
+				{
+					Show_Mates(all_mates);
+
+					down(semaphore_am_i_in_group_id);
+					am_i_in_group = YES;
+					up(semaphore_am_i_in_group_id);
+
+					answer_count = 1;
+					//free(all_group_indexes);
+				}
+			}
+			else if (status.MPI_TAG == I_HAVE_YOU_REQUEST)
 			{
 			}
-			else if(status.MPI_TAG == I_HAVE_YOU_REQUEST)
+			else if (status.MPI_TAG == I_HAVE_YOU_ANSWER)
 			{
-				
-			}
-			else if(status.MPI_TAG == I_HAVE_YOU_ANSWER)
-			{
-				if(message == YES)
+				if (message == YES)
 				{
 					have_me_tab[have_me_count] = status.MPI_SOURCE;
 					have_me_count++;
 				}
 				have_you_answer_count++;
-				if(have_you_answer_count == size)
+				if (have_you_answer_count == size)
 				{
 					//sprawdza czy ok
 					have_you_answer_count = 0;
@@ -590,7 +629,7 @@ int main(int argc, char **argv)
 					start_drinking = YES;
 					up(semaphore_start_drinking_id);
 
-					Send_Start_Drinking();
+					//Send_Start_Drinking();
 
 					sleep(5);
 					arbiter_answer_count = 0;
@@ -604,7 +643,7 @@ int main(int argc, char **argv)
 					}
 				}
 			}
-			else if(status.MPI_TAG == START_DRINKING)
+			else if (status.MPI_TAG == START_DRINKING)
 			{
 				down(semaphore_start_drinking_id);
 				start_drinking = YES;
