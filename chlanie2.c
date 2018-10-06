@@ -29,6 +29,7 @@
 #define ARBITER_ANSWER (int)5
 #define I_HAVE_YOU_REQUEST (int)6
 #define I_HAVE_YOU_ANSWER (int)7
+#define IS_CORRECT (int)8
 
 //answers
 #define NO (int)0
@@ -156,6 +157,18 @@ void Send_To_All(int buf, int tag)
 		{
 			sendInt(&buf, MESSAGE_SIZE, i, tag);
 			// printf("I sent to %d and my rank is %d\n", i, my_rank);
+		}
+	}
+}
+
+void Send_To_Ranks(int buf, int tag, int ranks[])
+{
+	int my_rank = rank;
+	for (int i = 0; i < size; i++)
+	{
+		if (ranks[i] != -1 && ranks[i] != my_rank)
+		{
+			sendInt(&buf, MESSAGE_SIZE, ranks[i], tag);
 		}
 	}
 }
@@ -432,11 +445,11 @@ int *Sum_Arrays(int *first_array, int *second_array)
 	int *result_array = malloc(size * sizeof(int));
 	memset(result_array, -1, size * sizeof(int));
 
-	for(int i = 0; i < size; i++)
+	for (int i = 0; i < size; i++)
 	{
 		Add_Mate_To_Group(first_array[i], result_array);
 		Add_Mate_To_Group(second_array[i], result_array);
-	}	
+	}
 
 	return result_array;
 }
@@ -444,23 +457,23 @@ int *Sum_Arrays(int *first_array, int *second_array)
 int Compare_Arrays(int *first_array, int *second_array)
 {
 	int found = NO;
-	for(int i = 0; i < size; i++)
-        {
-		for(int j = 0; j < size; j++)
-        	{
-			if(i != j && first_array[i] == second_array[j])
+	for (int i = 0; i < size; i++)
+	{
+		for (int j = 0; j < size; j++)
+		{
+			if (i != j && first_array[i] == second_array[j])
 			{
 				found = YES;
 				break;
 			}
-	        }
+		}
 
-		if(found == NO)
+		if (found == NO)
 		{
 			return NO;
 		}
 		found = NO;
-        }
+	}
 	return YES;
 }
 
@@ -491,7 +504,7 @@ void *childThread()
 	down(semaphore_clock_id);
 	timestamp = *lamport_clock;
 	up(semaphore_clock_id);
-	
+
 	if (am_i_master == YES)
 	{
 		printf("Request arbiter\n");
@@ -540,7 +553,6 @@ int main(int argc, char **argv)
 
 	// semaphore_iteration_count_id = semget(IPC_PRIVATE, SEMCOUNT, 0666 | IPC_CREAT);
 	// semctl(semaphore_iteration_count_id, 0, SETVAL, (int)1);
-
 
 	MPI_Status status;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -621,7 +633,7 @@ int main(int argc, char **argv)
 				if (answer_count == size)
 				{
 					Show_Mates(all_mates);
-					for(int i=0; i<buffer_count; i++)
+					for (int i = 0; i < buffer_count; i++)
 					{
 						message = Check_If_I_Have_You(all_mates, requests_buffer[i]);
 						sendInt(&message, 1, requests_buffer[i], I_HAVE_YOU_ANSWER);
@@ -636,7 +648,7 @@ int main(int argc, char **argv)
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_REQUEST)
 			{
-				if(answer_count == size)
+				if (answer_count == size)
 				{
 					message = Check_If_I_Have_You(all_mates, status.MPI_SOURCE);
 					sendInt(&message, 1, status.MPI_SOURCE, I_HAVE_YOU_ANSWER);
@@ -658,7 +670,24 @@ int main(int argc, char **argv)
 				if (have_you_answer_count == size)
 				{
 					//sprawdza czy ok
+					int *my_ranks = Sum_Arrays(all_mates, have_me_tab);
+					if (Compare_Arrays(all_mates, have_me_tab) == YES)
+						message = YES;
+					else
+						message = NO;
+					Send_To_Ranks(message, IS_CORRECT, my_ranks);
 					have_you_answer_count = 1;
+				}
+			}
+			else if (status.MPI_TAG == IS_CORRECT)
+			{
+				if(message == YES)
+				{
+
+				}
+				else
+				{
+					
 				}
 			}
 			else if (status.MPI_TAG == ARBITER_REQUEST)
