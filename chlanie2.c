@@ -72,9 +72,7 @@ int semaphore_start_drinking_id;
 int end_of_gather;
 int semaphore_end_of_gather_id;
 
-// int iteration_count;
-// int semphore_iteration_count_id;
-
+int i_want_to_drink;
 int am_i_in_group;
 int *lamport_clock;
 int *all_mates;
@@ -114,7 +112,7 @@ int sendInt(int *data, int size, int destination, int tag)
 	//	printf("clock = %d\n", *clock);
 	memcpy(buf + size, lamport_clock, sizeof(int));
 	up(semaphore_clock_id);
-	printf("TAG %d and destination %d\n", tag, destination);
+//	printf("TAG %d and destination %d\n", tag, destination);
 	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 	free(buf);
 	//printf("tag = %d\n", tag);
@@ -510,6 +508,8 @@ void *childThread()
 {
 	while (1)
 	{
+		sleep(rank);
+		i_want_to_drink = YES;
 		Send_To_All(YES, WANT_TO_DRINK);
 
 		down(semaphore_end_of_gather_id);
@@ -655,7 +655,7 @@ int main(int argc, char **argv)
 		all_mates = malloc(size * sizeof(int));
 		memset(all_mates, -1, size * sizeof(int));
 
-		int i_want_to_drink = YES;
+		i_want_to_drink = NO;
 		int queryIndexLast = 0;
 		int queryIndexFirst = 0;
 		ArbiterRequest *requestsQuery = malloc(sizeof(*requestsQuery) * size);
@@ -694,8 +694,10 @@ int main(int argc, char **argv)
 			}
 			else if (status.MPI_TAG == ANSWER)
 			{
-				Add_Mate_To_Group(status.MPI_SOURCE, all_mates);
-
+				if(message == YES)
+				{
+					Add_Mate_To_Group(status.MPI_SOURCE, all_mates);
+				}
 				answer_count++;
 
 				if (answer_count == size)
