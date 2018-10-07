@@ -114,9 +114,10 @@ int sendInt(int *data, int size, int destination, int tag)
 	//	printf("clock = %d\n", *clock);
 	memcpy(buf + size, lamport_clock, sizeof(int));
 	up(semaphore_clock_id);
+	printf("TAG %d and destination %d\n", tag, destination);
 	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 	free(buf);
-	// printf("tag = %d\n", tag);
+	//printf("tag = %d\n", tag);
 	return ret;
 }
 
@@ -417,24 +418,25 @@ int Check_If_I_Have_You(int myTab[], int mate_rank)
 
 int Find_Master()
 {
-	int min = all_mates[0];
+	int max = all_mates[0];
 	for (int i = 1; i < size; i++)
 	{
 		if (all_mates[i] == -1)
 		{
-			break;
+			continue;
 		}
-		if (all_mates[i] < min)
+		if (all_mates[i] > max)
 		{
-			min = all_mates[i];
+			max = all_mates[i];
 		}
 	}
 
-	if (min > rank)
+	if (max < rank)
 	{
 		return rank;
 	}
-	return min;
+
+	return max;
 }
 
 void Add_Mate_To_Group(int mate_rank, int *all_mates)
@@ -508,13 +510,6 @@ void *childThread()
 {
 	while (1)
 	{
-		// printf("Start child! %d\n", rank);
-
-		// printf("I send to all and wait for all and my rank is %d\n", rank);
-		// down(semphore_iteration_count_id);
-		// iteration_count++;
-		// up(semaphore_iteration_count_id);
-
 		Send_To_All(YES, WANT_TO_DRINK);
 
 		down(semaphore_end_of_gather_id);
@@ -570,8 +565,9 @@ void *childThread()
 		if (master_rank != rank)
 		{
 			Send_End_Drinking();
-			master_rank = -1;
 		}
+
+		master_rank = -1;
 		memset(all_mates, -1, size * sizeof(int));
 
 		down(semaphore_am_i_in_group_id);
@@ -740,7 +736,8 @@ int main(int argc, char **argv)
 				have_you_answer_count++;
 				if (have_you_answer_count == size)
 				{
-					printf("COMPARE RESULT = %d and my rank is %d\n", Compare_Arrays(all_mates, have_me_tab), rank);
+					
+				//	printf("COMPARE RESULT = %d and my rank is %d\n", Compare_Arrays(all_mates, have_me_tab), rank);
 					//sprawdza czy ok
 					int *my_ranks = Sum_Arrays(all_mates, have_me_tab);
 					if (Compare_Arrays(all_mates, have_me_tab) == YES)
@@ -755,6 +752,7 @@ int main(int argc, char **argv)
 					{
 						if (is_correct == is_correct_answer_count)
 						{
+							Show_Mates(all_mates, "");
 							//zakonczone wybieranie
 							printf("im in group\n");
 							down(semaphore_am_i_in_group_id);
@@ -788,6 +786,7 @@ int main(int argc, char **argv)
 				{
 					if (is_correct == is_correct_answer_count)
 					{
+						Show_Mates(all_mates, "");
 						//zakonczone wybieranie
 						printf("im in group\n");
 						down(semaphore_am_i_in_group_id);
@@ -856,9 +855,8 @@ int main(int argc, char **argv)
 			else if (status.MPI_TAG == END_DRINKING)
 			{
 				arbiter_answer_count = 0;
-				master_rank = -1;
 				ArbiterRequest request;
-				printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
+			//	printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
 				for (int i = queryIndexFirst; i < queryIndexLast; i++)
 				{
 					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
