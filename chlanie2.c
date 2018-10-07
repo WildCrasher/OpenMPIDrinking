@@ -506,9 +506,9 @@ int Get_Mates_Count(int *all_mates)
 
 void *childThread()
 {
+	sleep(rank);
 	while (1)
 	{
-		sleep(rank);
 		i_want_to_drink = YES;
 		Send_To_All(YES, WANT_TO_DRINK);
 
@@ -717,15 +717,23 @@ int main(int argc, char **argv)
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_REQUEST)
 			{
-				if (answer_count == size)
+				if(i_want_to_drink == YES)
 				{
-					message = Check_If_I_Have_You(all_mates, status.MPI_SOURCE);
-					sendInt(&message, 1, status.MPI_SOURCE, I_HAVE_YOU_ANSWER);
+					if (answer_count == size)
+					{
+						message = Check_If_I_Have_You(all_mates, status.MPI_SOURCE);
+						sendInt(&message, 1, status.MPI_SOURCE, I_HAVE_YOU_ANSWER);
+					}
+					else
+					{
+						requests_buffer[buffer_count] = status.MPI_SOURCE;
+						buffer_count++;
+					}
 				}
 				else
 				{
-					requests_buffer[buffer_count] = status.MPI_SOURCE;
-					buffer_count++;
+					message = NO;
+					sendInt(&message, 1, status.MPI_SOURCE, I_HAVE_YOU_ANSWER);
 				}
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_ANSWER)
@@ -752,8 +760,9 @@ int main(int argc, char **argv)
 					stage_3_complete = YES;
 					if (is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
 					{
-						if (is_correct == is_correct_answer_count)
+						if (is_correct == is_correct_answer_count && all_mates[0] != -1)
 						{
+							i_want_to_drink = NO;
 							Show_Mates(all_mates, "");
 							//zakonczone wybieranie
 							printf("im in group\n");
@@ -761,7 +770,7 @@ int main(int argc, char **argv)
 							am_i_in_group = YES;
 							up(semaphore_am_i_in_group_id);
 						}
-						printf("ENDOFGATHER\n");
+					//	printf("ENDOFGATHER\n");
 
 						down(semaphore_end_of_gather_id);
 						end_of_gather = YES;
@@ -786,8 +795,9 @@ int main(int argc, char **argv)
 				is_correct_answer_count++;
 				if (stage_3_complete && is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
 				{
-					if (is_correct == is_correct_answer_count)
+					if (is_correct == is_correct_answer_count && all_mates[0] != -1)
 					{
+						i_want_to_drink = NO;
 						Show_Mates(all_mates, "");
 						//zakonczone wybieranie
 						printf("im in group\n");
@@ -795,7 +805,7 @@ int main(int argc, char **argv)
 						am_i_in_group = YES;
 						up(semaphore_am_i_in_group_id);
 					}
-					printf("ENDOFGATHER\n");
+				//	printf("ENDOFGATHER\n");
 
 					down(semaphore_end_of_gather_id);
 					end_of_gather = YES;
@@ -816,7 +826,7 @@ int main(int argc, char **argv)
 				// timestamp = *lamport_clock;
 				// up(semaphore_clock_id);
 				// printf("request\n");
-				printf("timestamp=%d message=%d\n", timestamp, message);
+				//printf("timestamp=%d message=%d\n", timestamp, message);
 				if (master_rank != rank || timestamp > message)
 				{
 					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
