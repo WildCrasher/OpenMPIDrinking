@@ -105,6 +105,10 @@ void down(int semid)
 
 int sendInt(int *data, int size, int destination, int tag)
 {
+	if(tag == ARBITER_ANSWER)
+	{
+		printf("send arbiter answer to %d\n", destination);
+	}
 	int *buf = malloc((size + 1) * sizeof(int));
 	memcpy(buf, data, size * sizeof(int));
 	down(semaphore_clock_id);
@@ -112,7 +116,7 @@ int sendInt(int *data, int size, int destination, int tag)
 	//	printf("clock = %d\n", *clock);
 	memcpy(buf + size, lamport_clock, sizeof(int));
 	up(semaphore_clock_id);
-//	printf("TAG %d and destination %d\n", tag, destination);
+	//	printf("TAG %d and destination %d\n", tag, destination);
 	int ret = MPI_Send(buf, size + 1, MPI_INT, destination, tag, MPI_COMM_WORLD);
 	free(buf);
 	//printf("tag = %d\n", tag);
@@ -204,7 +208,7 @@ void Send_Start_Drinking()
 	}
 }
 
-void Show_Mates(int *my_mates, char* parametr)
+void Show_Mates(int *my_mates, char *parametr)
 {
 	int my_rank = rank;
 
@@ -536,6 +540,7 @@ void *childThread()
 		up(semaphore_am_i_in_group_id);
 
 		master_rank = Find_Master();
+		printf("master_rank=%d\n",master_rank);
 
 		down(semaphore_clock_id);
 		timestamp = *lamport_clock;
@@ -562,6 +567,9 @@ void *childThread()
 
 		sleep(5);
 
+		down(semaphore_start_drinking_id);
+		start_drinking = NO;
+		up(semaphore_start_drinking_id);
 		if (master_rank != rank)
 		{
 			Send_End_Drinking();
@@ -582,12 +590,11 @@ void *childThread()
 void Show_All(int *tab, char *parametr)
 {
 	for (int i = 0; i < size; i++)
-        {
+	{
 		printf("ALLLL my rank is %d and this is tab %s: %d  ", rank, parametr, tab[i]);
 	}
 	printf("\n");
 }
-
 
 int main(int argc, char **argv)
 {
@@ -694,7 +701,7 @@ int main(int argc, char **argv)
 			}
 			else if (status.MPI_TAG == ANSWER)
 			{
-				if(message == YES)
+				if (message == YES)
 				{
 					Add_Mate_To_Group(status.MPI_SOURCE, all_mates);
 				}
@@ -717,7 +724,7 @@ int main(int argc, char **argv)
 			}
 			else if (status.MPI_TAG == I_HAVE_YOU_REQUEST)
 			{
-				if(i_want_to_drink == YES)
+				if (i_want_to_drink == YES)
 				{
 					if (answer_count == size)
 					{
@@ -746,8 +753,8 @@ int main(int argc, char **argv)
 				have_you_answer_count++;
 				if (have_you_answer_count == size)
 				{
-					
-				//	printf("COMPARE RESULT = %d and my rank is %d\n", Compare_Arrays(all_mates, have_me_tab), rank);
+
+					//	printf("COMPARE RESULT = %d and my rank is %d\n", Compare_Arrays(all_mates, have_me_tab), rank);
 					//sprawdza czy ok
 					int *my_ranks = Sum_Arrays(all_mates, have_me_tab);
 					if (Compare_Arrays(all_mates, have_me_tab) == YES)
@@ -760,9 +767,9 @@ int main(int argc, char **argv)
 					stage_3_complete = YES;
 					if (is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
 					{
+						i_want_to_drink = NO;
 						if (is_correct == is_correct_answer_count && all_mates[0] != -1)
 						{
-							i_want_to_drink = NO;
 							Show_Mates(all_mates, "");
 							//zakonczone wybieranie
 							printf("im in group\n");
@@ -770,7 +777,7 @@ int main(int argc, char **argv)
 							am_i_in_group = YES;
 							up(semaphore_am_i_in_group_id);
 						}
-					//	printf("ENDOFGATHER\n");
+						// printf("ENDOFGATHER\n");
 
 						down(semaphore_end_of_gather_id);
 						end_of_gather = YES;
@@ -795,9 +802,9 @@ int main(int argc, char **argv)
 				is_correct_answer_count++;
 				if (stage_3_complete && is_correct_answer_count == Get_Mates_Count(Sum_Arrays(all_mates, have_me_tab)))
 				{
+					i_want_to_drink = NO;
 					if (is_correct == is_correct_answer_count && all_mates[0] != -1)
 					{
-						i_want_to_drink = NO;
 						Show_Mates(all_mates, "");
 						//zakonczone wybieranie
 						printf("im in group\n");
@@ -805,7 +812,7 @@ int main(int argc, char **argv)
 						am_i_in_group = YES;
 						up(semaphore_am_i_in_group_id);
 					}
-				//	printf("ENDOFGATHER\n");
+					// printf("ENDOFGATHER\n");
 
 					down(semaphore_end_of_gather_id);
 					end_of_gather = YES;
@@ -827,14 +834,15 @@ int main(int argc, char **argv)
 				// up(semaphore_clock_id);
 				// printf("request\n");
 				//printf("timestamp=%d message=%d\n", timestamp, message);
+				// printf("master_rank=%d\n",master_rank);
 				if (master_rank != rank || timestamp > message)
 				{
-					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+					// printf("send arbiter answer to %d\n", status.MPI_SOURCE);
 					sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
 				}
 				else if (timestamp == message && rank < status.MPI_SOURCE)
 				{
-					printf("send arbiter answer to %d\n", status.MPI_SOURCE);
+					// printf("send arbiter answer to %d\n", status.MPI_SOURCE);
 					sendInt(&timestamp, 1, status.MPI_SOURCE, ARBITER_ANSWER);
 				}
 				else
@@ -868,7 +876,7 @@ int main(int argc, char **argv)
 			{
 				arbiter_answer_count = 0;
 				ArbiterRequest request;
-			//	printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
+				printf("first = %d, last = %d\n", queryIndexFirst, queryIndexLast);
 				for (int i = queryIndexFirst; i < queryIndexLast; i++)
 				{
 					request = Pick_From_Query(requestsQuery, &queryIndexFirst, &queryIndexLast);
